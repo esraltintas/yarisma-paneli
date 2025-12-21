@@ -6,9 +6,9 @@ export const participants: Participant[] = [
   { id: "p3", name: "Hasan Kirik" },
   { id: "p4", name: "Huseyin Kaya" },
   { id: "p5", name: "Kaan Yavuz" },
-  { id: "p6", name: "Ferdi Tan" },
-  { id: "p7", name: "Mehmet Ali Yilmaz" },
-  { id: "p8", name: "Halil Semaver" },
+  { id: "p6", name: "Ferdi Ata" },
+  { id: "p7", name: "Efehan Alpagu" },
+  { id: "p8", name: "Halil Kuma" },
 ];
 
 export const results: StageResult[] = [
@@ -17,7 +17,7 @@ export const results: StageResult[] = [
   { participantId: "p1", stageId: "aerobik", timeMin: 7.0 },
   { participantId: "p1", stageId: "kuvvet", count: 42 },
 
-  { participantId: "p2", stageId: "atis", timeMin: 0.08 }, // 5 sn
+  { participantId: "p2", stageId: "atis", timeMin: 10 }, // 5 sn
   { participantId: "p2", stageId: "anaerobik", timeMin: 0.17 },
   { participantId: "p2", stageId: "aerobik", timeMin: 0.67 },
   { participantId: "p2", stageId: "kuvvet", count: 50 },
