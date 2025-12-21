@@ -2,6 +2,8 @@ import { STAGES } from "./stages";
 import { stagePointsByRank } from "./scoring";
 import type { Participant, StageResult } from "./types";
 
+import { competitionRanksByTime } from "@/lib/ranking";
+
 export type StageCellInfo = {
   timeSec: number | null;
   rank: number | null; // o etapta kaçıncı
@@ -44,8 +46,10 @@ export function calculateStageBreakdown(
       .filter((x) => x.time != null)
       .sort((a, b) => a.time! - b.time!);
 
+    const ranks = competitionRanksByTime(ranked, (r) => r.time!);
+
     ranked.forEach((r, idx) => {
-      const rank = idx + 1;
+      const rank = ranks[idx]; // 4,4,4,4,4,9 ✔
       const points = stagePointsByRank(rank);
       const weighted = points * stage.weight;
 

@@ -30,7 +30,13 @@ export default function DashboardPage() {
       participant: p,
       overall: overallMap.get(p.id) ?? 0,
     }))
-    .sort((a, b) => b.overall - a.overall);
+    .sort((a, b) => {
+      // 1) overall desc
+      if (b.overall !== a.overall) return b.overall - a.overall;
+
+      // 2) tie-break: alfabetik isim (TR)
+      return a.participant.name.localeCompare(b.participant.name, "tr");
+    });
 
   type Row = (typeof rows)[number];
   type RankedRow = Row & { rank: number };
@@ -113,12 +119,11 @@ export default function DashboardPage() {
           </thead>
 
           <tbody>
-            {rankedRows.map((row) => (
+            {rankedRows.map((row, index) => (
               <tr key={row.participant.id}>
                 <td style={tdSticky}>
-                  {row.rank}. {row.participant.name}
+                  {index + 1}. {row.participant.name}
                 </td>
-
                 {STAGES.map((stage) => {
                   const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
                   const time = cell?.timeSec ?? null;
