@@ -1,34 +1,28 @@
 import { STAGES } from "./stages";
 import { stagePointsByRank } from "./scoring";
 import type { Participant, StageResult } from "./types";
-
 import { competitionRanksByTime } from "@/lib/ranking";
 
 export type StageCellInfo = {
-  timeSec: number | null;
-  rank: number | null; // o etapta kaçıncı
-  points: number | null; // base etap puanı (100/95/...)
-  weighted: number | null; // ağırlıklı katkı (points * weight)
+  value: number | null; // timeSec veya count
+  metric: "time" | "count";
+  rank: number | null;
+  points: number | null;
+  weighted: number | null;
 };
 
 export function calculateStageBreakdown(
   participants: Participant[],
   results: StageResult[]
 ) {
-  const timeMap = new Map<string, number>();
-  results.forEach((r) => {
-    if (r.timeSec != null)
-      timeMap.set(`${r.participantId}:${r.stageId}`, r.timeSec);
-  });
-
   const cellMap = new Map<string, StageCellInfo>();
 
   // default: boş
   for (const p of participants) {
     for (const s of STAGES) {
-      const t = timeMap.get(`${p.id}:${s.id}`);
       cellMap.set(`${p.id}:${s.id}`, {
-        timeSec: t ?? null,
+        value: null,
+        metric: s.metric,
         rank: null,
         points: null,
         weighted: null,
@@ -39,22 +33,34 @@ export function calculateStageBreakdown(
   // her etap için sırala -> rank -> puan
   for (const stage of STAGES) {
     const ranked = participants
-      .map((p) => ({
-        participantId: p.id,
-        time: timeMap.get(`${p.id}:${stage.id}`),
-      }))
-      .filter((x) => x.time != null)
-      .sort((a, b) => a.time! - b.time!);
+      .map((p) => {
+        const r = results.find(
+          (x) => x.participantId === p.id && x.stageId === stage.id
+        );
 
-    const ranks = competitionRanksByTime(ranked, (r) => r.time!);
+        const value =
+          stage.metric === "time" ? r?.timeMin ?? null : r?.count ?? null;
+        return { participantId: p.id, value };
+      })
+      .filter(
+        (x): x is { participantId: string; value: number } => x.value != null
+      )
+      .sort((a, b) => {
+        // time: küçük daha iyi, count: büyük daha iyi
+        return stage.metric === "time" ? a.value - b.value : b.value - a.value;
+      });
+
+    // ✅ competition ranking (tie varsa aynı rank, sonra atlayarak)
+    const ranks = competitionRanksByTime(ranked, (r) => r.value);
 
     ranked.forEach((r, idx) => {
-      const rank = ranks[idx]; // 4,4,4,4,4,9 ✔
+      const rank = ranks[idx];
       const points = stagePointsByRank(rank);
       const weighted = points * stage.weight;
 
       cellMap.set(`${r.participantId}:${stage.id}`, {
-        timeSec: r.time!,
+        value: r.value,
+        metric: stage.metric,
         rank,
         points,
         weighted,

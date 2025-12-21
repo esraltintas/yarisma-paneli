@@ -5,6 +5,7 @@ export type Participant = {
 
 export type StageResult = {
   participantId: string;
-  stageId: string; // "atis" | "anaerobik" | ...
-  timeSec: number | null; // süre yoksa null
+  stageId: string;
+  timeMin?: number | null; // ⬅️ dakika (ondalıklı)
+  count?: number | null; // kuvvet
 };

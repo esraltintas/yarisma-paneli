@@ -10,8 +10,8 @@ export function calculateOverall(
   const timeMap = new Map<string, number>();
 
   results.forEach((r) => {
-    if (r.timeSec != null) {
-      timeMap.set(`${r.participantId}:${r.stageId}`, r.timeSec);
+    if (r.timeMin != null) {
+      timeMap.set(`${r.participantId}:${r.stageId}`, r.timeMin);
     }
   });
 
@@ -22,13 +22,13 @@ export function calculateOverall(
 
   STAGES.forEach((stage) => {
     // Bu etapta süre girenleri sırala
-   const ranked = participants
-     .map((p) => ({
-       participantId: p.id,
-       time: timeMap.get(`${p.id}:${stage.id}`),
-     }))
-     .filter((r) => r.time != null)
-     .sort((a, b) => a.time! - b.time!);
+    const ranked = participants
+      .map((p) => ({
+        participantId: p.id,
+        time: timeMap.get(`${p.id}:${stage.id}`),
+      }))
+      .filter((r) => r.time != null)
+      .sort((a, b) => a.time! - b.time!);
 
     ranked.forEach((r, index) => {
       const rank = index + 1;

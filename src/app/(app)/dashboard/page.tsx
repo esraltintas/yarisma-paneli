@@ -4,59 +4,23 @@ import { formatTime } from "@/lib/format";
 import { calculateOverall } from "@/lib/calc";
 import { calculateStageBreakdown } from "@/lib/breakdown";
 
-const RULE_TOOLTIP = `Puanlama (süre en düşük -> en yüksek):
-1–3: 100
-4–7: 95
-8–12: 90
-13–20: 85
-21–30: 80
-31–40: 75
-41–50: 70
-51–60: 65
-61–70: 60
-71–80: 55
-81–88: 50
-89–94: 45
-95–97: 35
-98–99: 20
-100: 0`;
-
 export default function DashboardPage() {
   const overallMap = calculateOverall(participants, results);
   const cellMap = calculateStageBreakdown(participants, results);
 
+  // ✅ Overall: desc, tie -> alfabetik (TR)
   const rows = participants
     .map((p) => ({
       participant: p,
       overall: overallMap.get(p.id) ?? 0,
     }))
     .sort((a, b) => {
-      // 1) overall desc
-      if (b.overall !== a.overall) return b.overall - a.overall;
+      const ao = Number(a.overall.toFixed(2));
+      const bo = Number(b.overall.toFixed(2));
 
-      // 2) tie-break: alfabetik isim (TR)
+      if (bo !== ao) return bo - ao;
       return a.participant.name.localeCompare(b.participant.name, "tr");
     });
-
-  type Row = (typeof rows)[number];
-  type RankedRow = Row & { rank: number };
-
-  const rankedRows: RankedRow[] = [];
-
-  let lastScore: number | null = null;
-  let lastRank = 0;
-
-  rows.forEach((row, index) => {
-    const score = row.overall;
-
-    // ilk satır veya skor değiştiyse: rank = index + 1
-    if (lastScore === null || score !== lastScore) {
-      lastRank = index + 1;
-      lastScore = score;
-    }
-
-    rankedRows.push({ ...row, rank: lastRank });
-  });
 
   return (
     <>
@@ -93,47 +57,42 @@ export default function DashboardPage() {
                       gap: 6,
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                      }}
-                    >
-                      <span>{stage.title}</span>
-                    </div>
+                    <span>{stage.title}</span>
                     <span style={subText}>%{formatWeight(stage.weight)}</span>
                   </div>
                 </th>
               ))}
 
               <th style={th}>
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 2 }}
-                >
-                  <span>Genel Toplam</span>
-                </div>
+                <span>Genel Toplam</span>
               </th>
             </tr>
           </thead>
 
           <tbody>
-            {rankedRows.map((row, index) => (
+            {rows.map((row, index) => (
               <tr key={row.participant.id}>
                 <td style={tdSticky}>
                   {index + 1}. {row.participant.name}
                 </td>
+
                 {STAGES.map((stage) => {
                   const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
-                  const time = cell?.timeSec ?? null;
+                  const v = cell?.value ?? null;
                   const pts = cell?.points ?? null;
                   const rank = cell?.rank ?? null;
                   const weighted = cell?.weighted ?? null;
 
+                  const valueText =
+                    cell?.metric === "time"
+                      ? formatTime(v)
+                      : v == null
+                      ? "-"
+                      : `${v} adet`;
+
                   const cellTitle =
                     pts == null
-                      ? "Bu etap için süre girilmemiş."
+                      ? "Bu etap için veri girilmemiş."
                       : `Rank: ${rank}\nEtap puanı: ${pts}\nAğırlıklı katkı: ${weighted?.toFixed(
                           2
                         )} (puan × %${formatWeight(stage.weight)})`;
@@ -147,7 +106,7 @@ export default function DashboardPage() {
                           gap: 8,
                         }}
                       >
-                        <span>{formatTime(time)}</span>
+                        <span>{valueText}</span>
 
                         {pts != null ? (
                           <span style={pill}>+{pts}</span>
@@ -163,7 +122,7 @@ export default function DashboardPage() {
                   style={{ ...td, fontWeight: 700 }}
                   title="Toplam ağırlıklı puan"
                 >
-                  {Number(row.overall.toFixed(2))}
+                  {row.overall.toFixed(2)}
                 </td>
               </tr>
             ))}
@@ -235,18 +194,4 @@ const missing: React.CSSProperties = {
   borderRadius: 999,
   border: "1px dashed #E5E7EB",
   color: "#9CA3AF",
-};
-
-const infoIcon: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 18,
-  height: 18,
-  borderRadius: 999,
-  border: "1px solid #E5E7EB",
-  fontSize: 12,
-  color: "#6B7280",
-  cursor: "help",
-  userSelect: "none",
 };
