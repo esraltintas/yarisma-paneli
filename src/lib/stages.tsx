@@ -1,13 +1,12 @@
 export type Stage = {
   id: string;
   title: string;
-  order?: number;
-  active?: boolean;
+  weight: number; // yüzde
 };
 
 export const STAGES: Stage[] = [
-  { id: "atis", title: "Atış" },
-  { id: "anaerobik", title: "Anaerobik" },
-  { id: "aerobik", title: "Aerobik" },
-  { id: "kuvvet", title: "Kuvvet" },
+  { id: "atis", title: "Atış", weight: 0.55 },
+  { id: "anaerobik", title: "Anaerobik", weight: 0.18 },
+  { id: "aerobik", title: "Aerobik", weight: 0.135 },
+  { id: "kuvvet", title: "Kuvvet", weight: 0.135 },
 ];
