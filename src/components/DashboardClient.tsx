@@ -36,7 +36,6 @@ export default function DashboardClient() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
 
-  // ✅ 1 kere yükle
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -53,7 +52,6 @@ export default function DashboardClient() {
     };
   }, []);
 
-  // quick lookup: participantId:stageId -> value
   const valueMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const x of values) {
@@ -63,7 +61,6 @@ export default function DashboardClient() {
     return m;
   }, [values]);
 
-  // etap bazlı rank/puan hesapla (tie'lı, rank atlamalı)
   const stageRankMaps = useMemo(() => {
     const maps: Record<
       string,
@@ -71,7 +68,6 @@ export default function DashboardClient() {
     > = {};
 
     for (const stage of STAGES) {
-      // sadece değeri olanlar rank'lanır
       const present = participants
         .map((p) => ({
           participantId: p.id,
@@ -84,9 +80,7 @@ export default function DashboardClient() {
 
       present.sort((a, b) => {
         const c =
-          stage.metric === "time"
-            ? a.value - b.value // küçük daha iyi
-            : b.value - a.value; // büyük daha iyi
+          stage.metric === "time" ? a.value - b.value : b.value - a.value;
         if (c !== 0) return c;
         return a.participantId.localeCompare(b.participantId);
       });
@@ -111,7 +105,7 @@ export default function DashboardClient() {
           pointsByPid.set(pid, pts);
         }
 
-        currentRank += groupSize; // ✅ rank atlama kuralı
+        currentRank += groupSize;
         i = j;
       }
 
@@ -121,11 +115,9 @@ export default function DashboardClient() {
     return maps;
   }, [participants, valueMap]);
 
-  // cellMap + overall
   const { cellMap, overallRows } = useMemo(() => {
     const cellMap = new Map<string, StageCell>();
 
-    // default boş hücreler
     for (const p of participants) {
       for (const s of STAGES) {
         const v = valueMap.get(`${p.id}:${s.id}`) ?? null;
@@ -139,7 +131,6 @@ export default function DashboardClient() {
       }
     }
 
-    // doldur
     for (const s of STAGES) {
       const { rankByPid, pointsByPid } = stageRankMaps[s.id] ?? {
         rankByPid: new Map(),
@@ -163,7 +154,6 @@ export default function DashboardClient() {
       }
     }
 
-    // overall rows (genel toplamda tie-break alfabetik, rank paylaşımı yok)
     const overall = participants
       .map((p) => {
         let total = 0;
@@ -201,7 +191,6 @@ export default function DashboardClient() {
 
     const escape = (v: unknown) => {
       const s = String(v ?? "");
-      // CSV güvenli
       if (
         s.includes('"') ||
         s.includes("\n") ||
@@ -224,7 +213,6 @@ export default function DashboardClient() {
         const v = cell?.value ?? null;
         const pts = cell?.points ?? "";
 
-        // Excel TR için ondalık virgül daha iyi olabilir:
         const valueOut =
           v == null
             ? ""
@@ -239,7 +227,6 @@ export default function DashboardClient() {
       lines.push(cells.map(escape).join(sep));
     }
 
-    // UTF-8 BOM: Türkçe karakterler Excel’de bozulmasın
     const csv = "\uFEFF" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
 
@@ -267,105 +254,119 @@ export default function DashboardClient() {
   }
 
   return (
-    <div
-      style={{
-        overflowX: "auto",
-        border: "1px solid #E5E7EB",
-        borderRadius: 12,
-        background: "white",
-        color: "#111827",
-      }}
-    >
+    <div>
+      {/* ✅ Top-right export button (outside table) */}
       <div
-        style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: 12,
+        }}
       >
         <button onClick={exportCsv} style={exportBtn}>
           Excel’e Aktar (CSV)
         </button>
-      </div>{" "}
-      <table
+      </div>
+
+      <div
         style={{
-          width: "100%",
-          borderCollapse: "separate",
-          borderSpacing: 0,
-          minWidth: 980,
+          overflowX: "auto",
+          border: "1px solid #E5E7EB",
+          borderRadius: 12,
           background: "white",
           color: "#111827",
         }}
       >
-        <thead>
-          <tr>
-            <th style={thSticky}>Kişi Listesi</th>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            minWidth: 980,
+            background: "white",
+            color: "#111827",
+          }}
+        >
+          <thead>
+            <tr>
+              <th style={thSticky}>Kişi Listesi</th>
 
-            {STAGES.map((stage) => (
-              <th key={stage.id} style={th} title={RULE_TOOLTIP}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>{stage.title}</span>
-                  <span style={subText}>%{formatWeight(stage.weight)}</span>
-                </div>
+              {STAGES.map((stage) => (
+                <th key={stage.id} style={th} title={RULE_TOOLTIP}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span>{stage.title}</span>
+                    <span style={subText}>%{formatWeight(stage.weight)}</span>
+                  </div>
+                </th>
+              ))}
+
+              <th style={th}>
+                <span>Genel Toplam</span>
               </th>
-            ))}
-
-            <th style={th}>
-              <span>Genel Toplam</span>
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {overallRows.map((row) => (
-            <tr key={row.participant.id}>
-              <td style={tdSticky}>
-                {row.rank}. {row.participant.name}
-              </td>
-
-              {STAGES.map((stage) => {
-                const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
-                const v = cell?.value ?? null;
-                const pts = cell?.points ?? null;
-                const rank = cell?.rank ?? null;
-                const weighted = cell?.weighted ?? null;
-
-                const cellTitle =
-                  pts == null
-                    ? "Bu etap için değer girilmemiş."
-                    : `Sıra: ${rank}\nEtap puanı: ${pts}\nAğırlıklı katkı: ${weighted?.toFixed(
-                        2
-                      )} (puan × %${formatWeight(stage.weight)})`;
-
-                return (
-                  <td key={stage.id} style={td} title={cellTitle}>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span>
-                        {stage.metric === "time"
-                          ? formatTime(v)
-                          : v == null
-                          ? "-"
-                          : `${v} adet`}
-                      </span>
-
-                      {pts != null ? (
-                        <span style={pill}>+{pts}</span>
-                      ) : (
-                        <span style={missing}>—</span>
-                      )}
-                    </div>
-                  </td>
-                );
-              })}
-
-              <td
-                style={{ ...td, fontWeight: 800 }}
-                title="Toplam ağırlıklı puan"
-              >
-                {Number(row.total.toFixed(2))}
-              </td>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {overallRows.map((row) => (
+              <tr key={row.participant.id}>
+                <td style={tdSticky}>
+                  {row.rank}. {row.participant.name}
+                </td>
+
+                {STAGES.map((stage) => {
+                  const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
+                  const v = cell?.value ?? null;
+                  const pts = cell?.points ?? null;
+                  const rank = cell?.rank ?? null;
+                  const weighted = cell?.weighted ?? null;
+
+                  const cellTitle =
+                    pts == null
+                      ? "Bu etap için değer girilmemiş."
+                      : `Sıra: ${rank}\nEtap puanı: ${pts}\nAğırlıklı katkı: ${weighted?.toFixed(
+                          2
+                        )} (puan × %${formatWeight(stage.weight)})`;
+
+                  return (
+                    <td key={stage.id} style={td} title={cellTitle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <span>
+                          {stage.metric === "time"
+                            ? formatTime(v)
+                            : v == null
+                            ? "-"
+                            : `${v} adet`}
+                        </span>
+
+                        {pts != null ? (
+                          <span style={pill}>+{pts}</span>
+                        ) : (
+                          <span style={missing}>—</span>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+
+                <td
+                  style={{ ...td, fontWeight: 800 }}
+                  title="Toplam ağırlıklı puan"
+                >
+                  {Number(row.total.toFixed(2))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
