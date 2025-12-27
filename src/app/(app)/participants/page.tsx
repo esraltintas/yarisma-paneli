@@ -123,9 +123,7 @@ export default function ParticipantsPage() {
               {STAGES.map((s) => (
                 <th key={s.id} style={th}>
                   {s.title}
-                  <div style={{ fontSize: 12, color: "#6B7280" }}>
-                    {s.metric === "time" ? "dk" : "adet"}
-                  </div>
+                  <div style={{ fontSize: 12, color: "#6B7280" }}>dk</div>
                 </th>
               ))}
               <th style={th}></th>

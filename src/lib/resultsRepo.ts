@@ -4,7 +4,7 @@ export type StageId = string;
 export type StageValue = {
   participantId: ParticipantId;
   stageId: StageId;
-  value: number | null; // time => dk, count => adet
+  value: number | null;
 };
 
 export type ResultsRepo = {

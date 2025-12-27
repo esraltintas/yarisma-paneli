@@ -121,13 +121,7 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
 
     const sep = ";";
 
-    const headers = [
-      "Etap",
-      "Sıra",
-      "Katılımcı",
-      stage.metric === "time" ? "Süre (dk)" : "Adet",
-      "Puan",
-    ];
+    const headers = ["Etap", "Sıra", "Katılımcı", "Süre (dk)", "Puan"];
 
     const escape = (v: unknown) => {
       const s = String(v ?? "");
@@ -203,7 +197,7 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
         </div>
         <div style={{ color: "#6B7280", fontSize: 13, marginTop: 4 }}>
           Ağırlık: <b>%{formatWeight(stage.weight)}</b> • Ölçüm:{" "}
-          <b>{stage.metric === "time" ? "Süre (dk)" : "Adet"}</b>
+          <b>Süre (dk)</b>
         </div>
       </div>
 
@@ -221,7 +215,7 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
             <tr>
               <th style={th}>Sıra</th>
               <th style={th}>Katılımcı</th>
-              <th style={th}>{stage.metric === "time" ? "Süre" : "Adet"}</th>
+              <th style={th}>Süre</th>
               <th style={th}>Puan</th>
             </tr>
           </thead>
@@ -232,11 +226,7 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
                 <td style={td}>{r.rank ?? "—"}</td>
                 <td style={td}>{r.participant.name}</td>
                 <td style={td}>
-                  {stage.metric === "time"
-                    ? formatTime(r.value)
-                    : r.value == null
-                    ? "—"
-                    : `${r.value} adet`}
+                  {r.value == null ? "—" : formatTime(r.value)}
                 </td>
                 <td style={td}>{r.points ?? "—"}</td>
               </tr>

@@ -15,23 +15,6 @@ type StageCell = {
   weighted: number | null;
 };
 
-const RULE_TOOLTIP = `Puanlama (rank):
-1–3: 100
-4–7: 95
-8–12: 90
-13–20: 85
-21–30: 80
-31–40: 75
-41–50: 70
-51–60: 65
-61–70: 60
-71–80: 55
-81–88: 50
-89–94: 45
-95–97: 35
-98–99: 20
-100: 0`;
-
 export default function DashboardClient() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
@@ -182,10 +165,7 @@ export default function DashboardClient() {
     const headers = [
       "Genel Sıra",
       "Katılımcı",
-      ...STAGES.flatMap((s) => [
-        `${s.title} (${s.metric === "time" ? "dk" : "adet"})`,
-        `${s.title} Puan`,
-      ]),
+      ...STAGES.flatMap((s) => [`${s.title} (dk)`, `${s.title} Puan`]),
       "Genel Toplam",
     ];
 
@@ -292,7 +272,7 @@ export default function DashboardClient() {
               <th style={thSticky}>Kişi Listesi</th>
 
               {STAGES.map((stage) => (
-                <th key={stage.id} style={th} title={RULE_TOOLTIP}>
+                <th key={stage.id} style={th}>
                   <div
                     style={{ display: "flex", alignItems: "center", gap: 6 }}
                   >
