@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { STAGES } from "@/lib/stages";
+import { notFound } from "next/navigation";
 import { participantsRepo, type Participant } from "@/lib/participantsRepo";
 import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
-import { stagePointsByRank } from "@/lib/scoring"; // sende neredeyse orası
+import { stagePointsByRank } from "@/lib/scoring";
+import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 import { formatTime } from "@/lib/format";
 
 type Row = {
@@ -15,20 +15,28 @@ type Row = {
   points: number | null;
 };
 
-export default function StageRankingClient({ stageId }: { stageId: string }) {
-  const router = useRouter();
-
-  const stage = STAGES.find((s) => s.id === stageId);
-
+export default function StageRankingClient({
+  mode,
+  stageId,
+}: {
+  mode: Mode;
+  stageId: string;
+}) {
+  // ✅ HOOKS her zaman en üstte
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
 
+  // stage resolve (hook değil)
+  const stages = getStagesByMode(mode);
+  const stage = stages.find((s) => s.id === stageId) ?? null;
+
+  // load
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const [p, v] = await Promise.all([
-        participantsRepo.list(),
-        resultsRepo.list(),
+        participantsRepo.list(mode),
+        resultsRepo.list(mode),
       ]);
       if (cancelled) return;
       setParticipants(p);
@@ -37,26 +45,19 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // stage yoksa dashboard’a dön (notFound yerine client’ta en temiz yol)
-  useEffect(() => {
-    if (!stage) router.replace("/dashboard");
-  }, [stage, router]);
+  }, [mode]);
 
   const valueMap = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const x of values) {
-      if (x.value == null) continue;
-      m.set(`${x.participantId}:${x.stageId}`, x.value);
+    const m = new Map<string, number | null>();
+    for (const v of values) {
+      m.set(`${v.participantId}:${v.stageId}`, v.value ?? null);
     }
     return m;
   }, [values]);
 
   const rows: Row[] = useMemo(() => {
-    if (!stage) return [];
+    if (!stage) return []; // stage yoksa boş dön (render kısmında notFound yapacağız)
 
-    // value’lu olanları sırala (time asc, count desc)
     const present = participants
       .map((p) => ({
         participant: p,
@@ -68,19 +69,17 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
     }[];
 
     present.sort((a, b) => {
-      const c = stage.metric === "time" ? a.value - b.value : b.value - a.value;
+      const c = a.value - b.value; // time: küçük iyi
       if (c !== 0) return c;
-      return a.participant.id.localeCompare(b.participant.id);
+      return a.participant.name.localeCompare(b.participant.name, "tr");
     });
 
-    // tie rank (4,4,4,9) + puan
     const ranked: Row[] = [];
     let currentRank = 1;
     let i = 0;
 
     while (i < present.length) {
       const baseVal = present[i].value;
-
       let j = i;
       while (j < present.length && present[j].value === baseVal) j++;
 
@@ -96,15 +95,13 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
         });
       }
 
-      currentRank += groupSize;
+      currentRank += groupSize; // ✅ rank atlama
       i = j;
     }
 
-    // value’su olmayanları en alta ekle
-    const missing = participants
+    const missing: Row[] = participants
       .filter((p) => !valueMap.has(`${p.id}:${stage.id}`))
-      .sort((a, b) => a.name.localeCompare(b.name, "tr"))
-      .map<Row>((p) => ({
+      .map((p) => ({
         participant: p,
         value: null,
         rank: null,
@@ -114,23 +111,18 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
     return [...ranked, ...missing];
   }, [participants, valueMap, stage]);
 
-  if (!stage) return null;
+  // ✅ Guard HOOK'lardan sonra (artık conditional hook yok)
+  if (!stage) {
+    notFound();
+  }
 
-  function exportStageCsv() {
-    if (!stage) return;
-
+  function exportCsv() {
     const sep = ";";
-
-    const headers = ["Etap", "Sıra", "Katılımcı", "Süre (dk)", "Puan"];
+    const headers = ["Sıra", "Katılımcı", "Süre (dk)", "Puan"];
 
     const escape = (v: unknown) => {
       const s = String(v ?? "");
-      if (
-        s.includes('"') ||
-        s.includes("\n") ||
-        s.includes("\r") ||
-        s.includes(sep)
-      ) {
+      if (s.includes('"') || s.includes("\n") || s.includes(sep)) {
         return `"${s.replace(/"/g, '""')}"`;
       }
       return s;
@@ -140,21 +132,9 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
     lines.push(headers.map(escape).join(sep));
 
     for (const r of rows) {
-      const valueOut =
-        r.value == null
-          ? ""
-          : stage.metric === "time"
-          ? String(r.value).replace(".", ",")
-          : String(r.value);
-
+      const valueOut = r.value == null ? "" : String(r.value).replace(".", ",");
       lines.push(
-        [
-          stage.title,
-          r.rank ?? "",
-          r.participant.name,
-          valueOut,
-          r.points ?? "",
-        ]
+        [r.rank ?? "", r.participant.name, valueOut, r.points ?? ""]
           .map(escape)
           .join(sep)
       );
@@ -162,16 +142,11 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
 
     const csv = "\uFEFF" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
-
-    const fileName = `swat-${stage.id}-siralama-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    a.download = fileName;
+    a.download = `swat-${mode}-${stageId}-ranking.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -179,38 +154,19 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
-      <div style={{ marginBottom: 12 }}>
+    <div>
+      <div style={header}>
         <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>
           {stage.title} Sıralaması
         </h1>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 12,
-          }}
-        >
-          <button onClick={exportStageCsv} style={exportBtn}>
-            Excel’e Aktar (CSV)
-          </button>
-        </div>
-        <div style={{ color: "#6B7280", fontSize: 13, marginTop: 4 }}>
-          Ağırlık: <b>%{formatWeight(stage.weight)}</b> • Ölçüm:{" "}
-          <b>Süre (dk)</b>
-        </div>
+
+        <button onClick={exportCsv} style={exportBtn}>
+          Excel’e Aktar
+        </button>
       </div>
 
-      <div
-        style={{
-          overflowX: "auto",
-          border: "1px solid #E5E7EB",
-          borderRadius: 12,
-          background: "white",
-          color: "#111827",
-        }}
-      >
-        <table style={{ width: "100%", minWidth: 720 }}>
+      <div style={wrap}>
+        <table style={{ width: "100%", minWidth: 700 }}>
           <thead>
             <tr>
               <th style={th}>Sıra</th>
@@ -238,30 +194,36 @@ export default function StageRankingClient({ stageId }: { stageId: string }) {
   );
 }
 
-function formatWeight(w: number) {
-  const pct = w * 100;
-  return Number.isInteger(pct)
-    ? String(pct)
-    : pct.toFixed(1).replace(/\.0$/, "");
-}
+/* styles */
+const header: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 12,
+};
+
+const wrap: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  overflowX: "auto",
+  background: "white",
+};
 
 const th: React.CSSProperties = {
   padding: 12,
-  textAlign: "left",
   background: "#F9FAFB",
   borderBottom: "1px solid #E5E7EB",
-  whiteSpace: "nowrap",
+  textAlign: "left",
 };
 
 const td: React.CSSProperties = {
   padding: 12,
   borderBottom: "1px solid #F3F4F6",
-  whiteSpace: "nowrap",
 };
 
 const exportBtn: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 12,
+  padding: "8px 14px",
+  borderRadius: 10,
   border: "1px solid #111827",
   background: "#111827",
   color: "white",

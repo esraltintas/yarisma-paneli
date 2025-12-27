@@ -1,30 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { STAGES } from "@/lib/stages";
 import { participantsRepo, type Participant } from "@/lib/participantsRepo";
 import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { stagePointsByRank } from "@/lib/scoring";
 import { formatTime } from "@/lib/format";
+import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 
 type StageCell = {
-  metric: "time" | "count";
-  value: number | null;
+  value: number | null; // time (dk)
   rank: number | null;
   points: number | null;
   weighted: number | null;
 };
 
-export default function DashboardClient() {
+export default function DashboardClient({ mode }: { mode: Mode }) {
+  const STAGES = getStagesByMode(mode);
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
 
+  // ✅ 1 kere yükle (mode değişince tekrar)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const [p, v] = await Promise.all([
-        participantsRepo.list(),
-        resultsRepo.list(),
+        participantsRepo.list(mode),
+        resultsRepo.list(mode),
       ]);
       if (cancelled) return;
       setParticipants(p);
@@ -33,8 +35,9 @@ export default function DashboardClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mode]);
 
+  // quick lookup: pid:stageId -> value
   const valueMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const x of values) {
@@ -44,6 +47,7 @@ export default function DashboardClient() {
     return m;
   }, [values]);
 
+  // etap bazlı rank/puan hesapla (tie + rank atlama)
   const stageRankMaps = useMemo(() => {
     const maps: Record<
       string,
@@ -61,9 +65,9 @@ export default function DashboardClient() {
         value: number;
       }[];
 
+      // time: küçük daha iyi, deterministic tie-break
       present.sort((a, b) => {
-        const c =
-          stage.metric === "time" ? a.value - b.value : b.value - a.value;
+        const c = a.value - b.value;
         if (c !== 0) return c;
         return a.participantId.localeCompare(b.participantId);
       });
@@ -88,7 +92,7 @@ export default function DashboardClient() {
           pointsByPid.set(pid, pts);
         }
 
-        currentRank += groupSize;
+        currentRank += groupSize; // ✅ rank atlama
         i = j;
       }
 
@@ -96,16 +100,17 @@ export default function DashboardClient() {
     }
 
     return maps;
-  }, [participants, valueMap]);
+  }, [participants, valueMap, STAGES]);
 
+  // cellMap + overallRows
   const { cellMap, overallRows } = useMemo(() => {
     const cellMap = new Map<string, StageCell>();
 
+    // default boş hücreler
     for (const p of participants) {
       for (const s of STAGES) {
         const v = valueMap.get(`${p.id}:${s.id}`) ?? null;
         cellMap.set(`${p.id}:${s.id}`, {
-          metric: s.metric,
           value: v,
           rank: null,
           points: null,
@@ -114,10 +119,11 @@ export default function DashboardClient() {
       }
     }
 
+    // doldur
     for (const s of STAGES) {
       const { rankByPid, pointsByPid } = stageRankMaps[s.id] ?? {
-        rankByPid: new Map(),
-        pointsByPid: new Map(),
+        rankByPid: new Map<string, number>(),
+        pointsByPid: new Map<string, number>(),
       };
 
       for (const p of participants) {
@@ -137,6 +143,7 @@ export default function DashboardClient() {
       }
     }
 
+    // overall: tie-break alfabetik, rank paylaşımı yok (1..N)
     const overall = participants
       .map((p) => {
         let total = 0;
@@ -157,7 +164,7 @@ export default function DashboardClient() {
       }));
 
     return { cellMap, overallRows: overall };
-  }, [participants, valueMap, stageRankMaps]);
+  }, [participants, valueMap, stageRankMaps, STAGES]);
 
   function exportCsv() {
     const sep = ";";
@@ -193,13 +200,7 @@ export default function DashboardClient() {
         const v = cell?.value ?? null;
         const pts = cell?.points ?? "";
 
-        const valueOut =
-          v == null
-            ? ""
-            : stage.metric === "time"
-            ? String(v).replace(".", ",")
-            : String(v);
-
+        const valueOut = v == null ? "" : String(v).replace(".", ","); // Excel TR
         cells.push(valueOut, pts);
       }
 
@@ -213,12 +214,9 @@ export default function DashboardClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-
-    const fileName = `swat-yarisma-export-${new Date()
+    a.download = `swat-${mode}-dashboard-${new Date()
       .toISOString()
       .slice(0, 10)}.csv`;
-
-    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -235,12 +233,12 @@ export default function DashboardClient() {
 
   return (
     <div>
-      {/* ✅ Top-right export button (outside table) */}
+      {/* üst bar: sağda export */}
       <div
         style={{
           display: "flex",
           justifyContent: "flex-end",
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
         <button onClick={exportCsv} style={exportBtn}>
@@ -248,25 +246,8 @@ export default function DashboardClient() {
         </button>
       </div>
 
-      <div
-        style={{
-          overflowX: "auto",
-          border: "1px solid #E5E7EB",
-          borderRadius: 12,
-          background: "white",
-          color: "#111827",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "separate",
-            borderSpacing: 0,
-            minWidth: 980,
-            background: "white",
-            color: "#111827",
-          }}
-        >
+      <div style={wrap}>
+        <table style={table}>
           <thead>
             <tr>
               <th style={thSticky}>Kişi Listesi</th>
@@ -282,9 +263,7 @@ export default function DashboardClient() {
                 </th>
               ))}
 
-              <th style={th}>
-                <span>Genel Toplam</span>
-              </th>
+              <th style={th}>Genel Toplam</th>
             </tr>
           </thead>
 
@@ -318,13 +297,7 @@ export default function DashboardClient() {
                           gap: 8,
                         }}
                       >
-                        <span>
-                          {stage.metric === "time"
-                            ? formatTime(v)
-                            : v == null
-                            ? "-"
-                            : `${v} adet`}
-                        </span>
+                        <span>{v == null ? "-" : formatTime(v)}</span>
 
                         {pts != null ? (
                           <span style={pill}>+{pts}</span>
@@ -359,6 +332,23 @@ function formatWeight(w: number) {
 }
 
 /* ---------------- styles ---------------- */
+
+const wrap: React.CSSProperties = {
+  overflowX: "auto",
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  background: "white",
+  color: "#111827",
+};
+
+const table: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  minWidth: 980,
+  background: "white",
+  color: "#111827",
+};
 
 const th: React.CSSProperties = {
   textAlign: "left",
@@ -396,7 +386,7 @@ const exportBtn: React.CSSProperties = {
   border: "1px solid #111827",
   background: "#111827",
   color: "white",
-  fontWeight: 800,
+  fontWeight: 900,
   cursor: "pointer",
 };
 

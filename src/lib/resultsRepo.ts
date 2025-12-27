@@ -1,70 +1,91 @@
-export type ParticipantId = string;
-export type StageId = string;
+// src/lib/resultsRepo.ts
+import type { Mode } from "@/lib/getStagesByMode";
 
 export type StageValue = {
-  participantId: ParticipantId;
-  stageId: StageId;
-  value: number | null;
+  participantId: string;
+  stageId: string;
+  value: number | null; // dakika, null => sil/boş
 };
 
-export type ResultsRepo = {
-  list(): Promise<StageValue[]>;
-  upsert(v: StageValue): Promise<void>;
-  removeParticipant(participantId: ParticipantId): Promise<void>;
-};
+const VERSION = 1;
+const keyResults = (mode: Mode) => `swat.${mode}.results.v${VERSION}`;
 
-const KEY = "swat.stageValues.v1";
-
-function safeLoad(): StageValue[] {
-  if (typeof window === "undefined") return [];
+function safeLoad<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    const data = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(data)) return [];
-    return data
-      .filter(
-        (x) =>
-          x &&
-          typeof x.participantId === "string" &&
-          typeof x.stageId === "string" &&
-          (typeof x.value === "number" || x.value === null)
-      )
-      .map((x) => ({
-        participantId: x.participantId,
-        stageId: x.stageId,
-        value: x.value === null ? null : Number(x.value),
-      }));
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function save(list: StageValue[]) {
-  window.localStorage.setItem(KEY, JSON.stringify(list));
+function safeSave<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-export const resultsRepo: ResultsRepo = {
-  async list() {
-    return safeLoad();
+export const resultsRepo = {
+  async list(mode: Mode): Promise<StageValue[]> {
+    const key = keyResults(mode);
+    return safeLoad<StageValue[]>(key, []);
   },
 
-  async upsert(v) {
-    const list = safeLoad();
+  /**
+   * value null ise: kaydı siler (temiz davranış)
+   */
+  async upsert(input: {
+    mode: Mode;
+    participantId: string;
+    stageId: string;
+    value: number | null;
+  }): Promise<void> {
+    const { mode, participantId, stageId, value } = input;
+
+    const key = keyResults(mode);
+    const list = safeLoad<StageValue[]>(key, []);
+
     const next = list.filter(
-      (x) => !(x.participantId === v.participantId && x.stageId === v.stageId)
+      (x) => !(x.participantId === participantId && x.stageId === stageId)
     );
 
-    // null ise "sil" gibi davranalım (istersen tutabiliriz)
-    if (v.value === null) {
-      save(next);
-      return;
+    if (value !== null) {
+      next.push({ participantId, stageId, value });
     }
 
-    save([...next, v]);
+    safeSave(key, next);
   },
 
-  async removeParticipant(participantId) {
-    const list = safeLoad();
-    save(list.filter((x) => x.participantId !== participantId));
+  async remove(
+    mode: Mode,
+    participantId: string,
+    stageId: string
+  ): Promise<void> {
+    const key = keyResults(mode);
+    const list = safeLoad<StageValue[]>(key, []);
+    safeSave(
+      key,
+      list.filter(
+        (x) => !(x.participantId === participantId && x.stageId === stageId)
+      )
+    );
+  },
+
+  async removeByParticipant(mode: Mode, participantId: string): Promise<void> {
+    const key = keyResults(mode);
+    const list = safeLoad<StageValue[]>(key, []);
+    safeSave(
+      key,
+      list.filter((x) => x.participantId !== participantId)
+    );
+  },
+
+  async clear(mode: Mode): Promise<void> {
+    const key = keyResults(mode);
+    safeSave(key, []);
   },
 };
+
+// (opsiyonel debug)
+// window.resultsRepo = resultsRepo;

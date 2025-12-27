@@ -1,74 +1,74 @@
-import { resultsRepo } from "@/lib/resultsRepo";
+// src/lib/participantsRepo.ts
+import type { Mode } from "@/lib/getStagesByMode";
 
 export type Participant = {
   id: string;
   name: string;
 };
 
-export type ParticipantsRepo = {
-  list(): Promise<Participant[]>;
-  add(name: string): Promise<Participant>;
-  remove(id: string): Promise<void>;
-};
+const VERSION = 1;
+const keyParticipants = (mode: Mode) => `swat.${mode}.participants.v${VERSION}`;
 
-const KEY = "swat.participants.v1";
-
-/* ---------- private helpers (EXPORT EDİLMEZ) ---------- */
-
-function safeLoad(): Participant[] {
-  if (typeof window === "undefined") return [];
+function safeLoad<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
   try {
-    const raw = window.localStorage.getItem(KEY);
-    const data = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(data)) return [];
-    return data
-      .filter(
-        (x) => x && typeof x.id === "string" && typeof x.name === "string"
-      )
-      .map((x) => ({
-        id: x.id,
-        name: x.name.trim(),
-      }))
-      .filter((x) => x.name.length > 0);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function save(list: Participant[]) {
-  window.localStorage.setItem(KEY, JSON.stringify(list));
+function safeSave<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
 }
 
 function newId() {
-  return "p_" + Math.random().toString(36).slice(2, 10);
+  // deterministic değil ama local için yeterli
+  return `p_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
 }
 
-/* ---------------- public repo ---------------- */
-
-export const participantsRepo: ParticipantsRepo = {
-  async list() {
-    return safeLoad();
+export const participantsRepo = {
+  async list(mode: Mode): Promise<Participant[]> {
+    const key = keyParticipants(mode);
+    return safeLoad<Participant[]>(key, []);
   },
 
-  async add(name: string) {
-    const n = name.trim();
-    if (!n) throw new Error("İsim boş olamaz.");
+  async add(name: string, mode: Mode): Promise<Participant> {
+    const key = keyParticipants(mode);
+    const list = safeLoad<Participant[]>(key, []);
 
-    const list = safeLoad();
-    const exists = list.some((p) => p.name.toLowerCase() === n.toLowerCase());
-    if (exists) throw new Error("Bu isim zaten ekli.");
+    const p: Participant = { id: newId(), name };
+    list.push(p);
 
-    const participant: Participant = { id: newId(), name: n };
-    const next = [participant, ...list];
-    save(next);
-    return participant;
+    safeSave(key, list);
+    return p;
   },
 
-  async remove(id: string) {
-    const list = safeLoad();
-    save(list.filter((p) => p.id !== id));
+  async updateName(id: string, name: string, mode: Mode): Promise<void> {
+    const key = keyParticipants(mode);
+    const list = safeLoad<Participant[]>(key, []);
 
-    // 👇 kişinin tüm etap sonuçlarını da temizle
-    await resultsRepo.removeParticipant(id);
+    const idx = list.findIndex((x) => x.id === id);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], name };
+      safeSave(key, list);
+    }
+  },
+
+  async remove(id: string, mode: Mode): Promise<void> {
+    const key = keyParticipants(mode);
+    const list = safeLoad<Participant[]>(key, []);
+    safeSave(
+      key,
+      list.filter((x) => x.id !== id)
+    );
+  },
+
+  async clear(mode: Mode): Promise<void> {
+    const key = keyParticipants(mode);
+    safeSave(key, []);
   },
 };
