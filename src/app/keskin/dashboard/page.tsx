@@ -1,5 +1,4 @@
-import DashboardClient from "@/components/DashboardClient";
-
-export default function KeskinDashboardPage() {
-  return <DashboardClient mode="keskin" />;
+import { notFound } from "next/navigation";
+export default function Page() {
+  notFound();
 }

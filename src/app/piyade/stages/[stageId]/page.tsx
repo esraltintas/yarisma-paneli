@@ -1,5 +1,10 @@
 import StageRankingClient from "@/components/StageRankingClient";
 
-export default function Page({ params }: { params: { stageId: string } }) {
-  return <StageRankingClient mode="piyade" stageId={params.stageId} />;
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ stageId: string }>;
+}) {
+  const { stageId } = await params;
+  return <StageRankingClient mode="piyade" stageId={stageId} />;
 }
