@@ -189,6 +189,7 @@ const card: React.CSSProperties = {
   borderRadius: 16,
   background: "white",
   padding: 16,
+  maxWidth: 980,
 };
 
 const row: React.CSSProperties = {

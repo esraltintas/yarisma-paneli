@@ -2,129 +2,75 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
-
-function getModeFromPath(pathname: string): Mode | null {
-  if (pathname.startsWith("/piyade")) return "piyade";
-  if (pathname.startsWith("/keskin")) return "keskin";
-  return null; // anasayfa
-}
-
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(href + "/");
-}
+import { STAGES } from "@/lib/stages";
 
 export default function AppHeader() {
   const pathname = usePathname();
-  const mode = getModeFromPath(pathname);
 
-  // 🏠 Ana sayfa
-  const isHome = pathname === "/";
+  const isPiyade = pathname.startsWith("/piyade");
+  const isLogin = pathname.startsWith("/login");
 
-  const stages = mode ? getStagesByMode(mode) : [];
-  const participantsHref = mode ? `/${mode}/participants` : "#";
-  const stageHref = (stageId: string) => `/${mode}/stages/${stageId}`;
+  // Bu projede artık ana kullanım piyade:
+  const base = isPiyade ? "/piyade" : "";
+
+  // login ve root sayfasında nav istemiyorsun
+  const showNav = !isLogin && base !== "";
+
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }
 
   return (
-    <header
-      style={{
-        borderBottom: "1px solid #E5E7EB",
-        background: "white",
-        position: "sticky",
-        top: 0,
-        zIndex: 50,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          padding: "12px 16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        {/* Sol: Logo */}
-        <Link
-          href="/"
-          style={{
-            fontWeight: 900,
-            fontSize: 16,
-            color: "#111827",
-            textDecoration: "none",
-          }}
-        >
+    <header style={header}>
+      <div style={inner}>
+        <Link href={base ? `${base}/dashboard` : "/"} style={brand}>
           Swat Challange Mülakat Paneli
         </Link>
 
-        {/* Sağ: Menü (sadece piyade / keskin içindeyken) */}
-        {!isHome && mode && (
-          <nav style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {showNav ? (
+          <nav style={nav}>
             <Link
-              href={participantsHref}
-              style={navLink(isActive(pathname, participantsHref))}
+              href={`${base}/participants`}
+              style={navLink(pathname === `${base}/participants`)}
             >
               Katılımcılar
             </Link>
 
-            {/* Etaplar dropdown */}
             <details style={{ position: "relative" }}>
-              <summary
-                style={summaryBtn(isActive(pathname, `/${mode}/stages`))}
-              >
-                Etaplar ▾
+              <summary style={dropdownBtn}>
+                Etaplar <span style={{ fontSize: 12 }}>▼</span>
               </summary>
 
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 12,
-                  boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
-                  minWidth: 260,
-                  overflow: "hidden",
-                }}
-              >
-                {stages.map((s) => {
-                  const href = stageHref(s.id);
-                  const active = isActive(pathname, href);
+              <div style={menu}>
+                {STAGES.map((s) => {
+                  const href = `${base}/stages/${s.id}`;
+                  const active = pathname === href;
 
                   return (
-                    <Link
-                      key={s.id}
-                      href={href}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "10px 12px",
-                        textDecoration: "none",
-                        color: "#111827",
-                        background: active ? "#F3F4F6" : "transparent",
-                        fontWeight: active ? 800 : 600,
-                      }}
-                    >
+                    <Link key={s.id} href={href} style={menuItem(active)}>
                       <span>{s.title}</span>
-                      <span style={{ fontSize: 12, color: "#6B7280" }}>
-                        %{formatWeight(s.weight)}
-                      </span>
+                      <span style={weightText}>%{formatWeight(s.weight)}</span>
                     </Link>
                   );
                 })}
               </div>
             </details>
+
+            <button onClick={logout} style={logoutBtn}>
+              Çıkış
+            </button>
           </nav>
+        ) : (
+          <div />
         )}
       </div>
     </header>
   );
 }
-
-/* helpers */
 
 function formatWeight(w: number) {
   const pct = w * 100;
@@ -133,26 +79,94 @@ function formatWeight(w: number) {
     : pct.toFixed(1).replace(/\.0$/, "");
 }
 
-function navLink(active: boolean): React.CSSProperties {
-  return {
-    padding: "8px 10px",
-    borderRadius: 10,
-    textDecoration: "none",
-    color: "#111827",
-    fontWeight: active ? 900 : 700,
-    background: active ? "#F3F4F6" : "transparent",
-  };
-}
+/* styles */
 
-function summaryBtn(active: boolean): React.CSSProperties {
-  return {
-    listStyle: "none",
-    padding: "8px 10px",
-    borderRadius: 10,
-    cursor: "pointer",
-    userSelect: "none",
-    color: "#111827",
-    fontWeight: active ? 900 : 700,
-    background: active ? "#F3F4F6" : "transparent",
-  };
-}
+const header: React.CSSProperties = {
+  borderBottom: "1px solid #E5E7EB",
+  background: "white",
+};
+
+const inner: React.CSSProperties = {
+  maxWidth: 1100,
+  margin: "0 auto",
+  padding: "16px 16px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+};
+
+const brand: React.CSSProperties = {
+  textDecoration: "none",
+  color: "#111827",
+  fontWeight: 900,
+  fontSize: 20,
+};
+
+const nav: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+};
+
+const navLink = (active: boolean): React.CSSProperties => ({
+  textDecoration: "none",
+  color: "#111827",
+  fontWeight: 800,
+  padding: "10px 14px",
+  borderRadius: 12,
+  background: active ? "#F3F4F6" : "transparent",
+});
+
+const dropdownBtn: React.CSSProperties = {
+  listStyle: "none",
+  cursor: "pointer",
+  userSelect: "none",
+  padding: "10px 14px",
+  borderRadius: 12,
+  background: "#F3F4F6",
+  fontWeight: 800,
+  color: "#111827",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+};
+
+const menu: React.CSSProperties = {
+  position: "absolute",
+  right: 0,
+  marginTop: 10,
+  width: 360,
+  border: "1px solid #E5E7EB",
+  borderRadius: 14,
+  background: "white",
+  overflow: "hidden",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+  zIndex: 50,
+};
+
+const menuItem = (active: boolean): React.CSSProperties => ({
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "14px 14px",
+  textDecoration: "none",
+  color: "#111827",
+  fontWeight: 900,
+  background: active ? "#F9FAFB" : "white",
+  borderBottom: "1px solid #F3F4F6",
+});
+
+const weightText: React.CSSProperties = {
+  fontSize: 12,
+  color: "#6B7280",
+  fontWeight: 800,
+};
+
+const logoutBtn: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 12,
+  border: "1px solid #E5E7EB",
+  background: "white",
+  fontWeight: 800,
+  cursor: "pointer",
+};
