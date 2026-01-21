@@ -1,52 +1,20 @@
 // src/lib/auth.ts
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+// Edge-friendly (Node crypto yok)
 
-const COOKIE_NAME = "swat_session";
+export const sessionCookieName = "swat_session";
 
-function secret() {
-  return process.env.AUTH_SECRET || "dev-secret";
+// Bu değer cookie içine yazılacak "token".
+// Şimdilik basit tutuyoruz. İstersen env'den de alırız.
+export function sessionCookieValue() {
+  return "ok";
 }
 
-export function sessionCookieName() {
-  return COOKIE_NAME;
+// Cookie doğrulama (async kaldıysa proxy await istiyor diye async yaptım)
+export async function isAuthedCookie(cookieValue: string | undefined | null) {
+  return cookieValue === sessionCookieValue();
 }
 
-export function checkPassword(input: string) {
-  const real = process.env.AUTH_PASSWORD || "";
-  try {
-    return timingSafeEqual(Buffer.from(input), Buffer.from(real));
-  } catch {
-    return false;
-  }
-}
-
-export function newSessionId() {
-  return randomBytes(24).toString("hex");
-}
-
-export function signSessionId(sessionId: string) {
-  const sig = createHmac("sha256", secret()).update(sessionId).digest("hex");
-  return `${sessionId}.${sig}`;
-}
-
-export function verifySignedSessionId(
-  value: string | undefined | null
-): string | null {
-  if (!value) return null;
-  const idx = value.lastIndexOf(".");
-  if (idx <= 0) return null;
-
-  const sessionId = value.slice(0, idx);
-  const sig = value.slice(idx + 1);
-
-  const expected = createHmac("sha256", secret())
-    .update(sessionId)
-    .digest("hex");
-
-  try {
-    if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-    return sessionId;
-  } catch {
-    return null;
-  }
+// Login şifresi (env'den okunur). Yoksa fallback: "1234"
+export function getAdminPassword() {
+  return process.env.ADMIN_PASSWORD ?? "1234";
 }
