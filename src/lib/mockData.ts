@@ -8,7 +8,7 @@ export const participants: Participant[] = [
   { id: "p5", name: "Kaan Yavuz" },
   { id: "p6", name: "Ferdi Ata" },
   { id: "p7", name: "Efehan Alpagu" },
-  { id: "p8", name: "Halil Kuma" },
+  { id: "p8", name: "Halil Yaman" },
 ];
 
 export const results: StageResult[] = [

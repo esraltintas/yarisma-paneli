@@ -8,7 +8,7 @@ import { formatTime } from "@/lib/format";
 import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 
 type StageCell = {
-  value: number | null; // time (dk)
+  value: number | null; // time (sn)
   rank: number | null;
   points: number | null;
   weighted: number | null;
@@ -172,7 +172,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     const headers = [
       "Genel Sıra",
       "Katılımcı",
-      ...STAGES.flatMap((s) => [`${s.title} (dk)`, `${s.title} Puan`]),
+      ...STAGES.flatMap((s) => [`${s.title} (sn)`, `${s.title} Puan`]),
       "Genel Toplam",
     ];
 
@@ -200,7 +200,12 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         const v = cell?.value ?? null;
         const pts = cell?.points ?? "";
 
-        const valueOut = v == null ? "" : String(v).replace(".", ","); // Excel TR
+        const valueOut =
+          v == null
+            ? ""
+            : stage.metric === "time"
+              ? String(v).replace(".", ",")
+              : String(v);
         cells.push(valueOut, pts);
       }
 
@@ -285,7 +290,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
                     pts == null
                       ? "Bu etap için değer girilmemiş."
                       : `Sıra: ${rank}\nEtap puanı: ${pts}\nAğırlıklı katkı: ${weighted?.toFixed(
-                          2
+                          2,
                         )} (puan × %${formatWeight(stage.weight)})`;
 
                   return (

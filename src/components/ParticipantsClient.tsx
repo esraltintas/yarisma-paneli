@@ -1,19 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
-import { participantsRepo, type Participant } from "@/lib/participantsRepo";
-import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { formatTime } from "@/lib/format";
+import { participantsRepo, type Participant } from "@/lib/participantsRepo";
+import { resultsRepo, type StageValue, type Mode } from "@/lib/resultsRepo";
+import { STAGES, type Stage } from "@/lib/stages";
 
-export default function ParticipantsClient({ mode }: { mode: Mode }) {
-  const STAGES = useMemo(() => getStagesByMode(mode), [mode]);
+type Props = {
+  mode: Mode;
+};
+
+function getStagesByMode(mode: Mode): Stage[] {
+  // Şimdilik: tek STAGES kullanıyorsan bu yeterli.
+  // Eğer ileride mode'a göre stage setin ayrışırsa burada split edersin.
+  return STAGES;
+}
+
+export default function ParticipantsClient({ mode }: Props) {
+  const stages = useMemo(() => getStagesByMode(mode), [mode]);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
-  const [newName, setNewName] = useState("");
+  const [nameInput, setNameInput] = useState("");
 
-  // 1) load
+  // ✅ 1 kere yükle
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -25,149 +35,132 @@ export default function ParticipantsClient({ mode }: { mode: Mode }) {
       setParticipants(p);
       setValues(v);
     })();
+
     return () => {
       cancelled = true;
     };
   }, [mode]);
 
-  // 2) quick lookup: pid:stageId -> value
+  // participantId:stageId -> value
   const valueMap = useMemo(() => {
-    const m = new Map<string, number | null>();
+    const m = new Map<string, number>();
     for (const x of values) {
-      m.set(`${x.participantId}:${x.stageId}`, x.value ?? null);
+      if (x.value == null) continue;
+      m.set(`${x.participantId}:${x.stageId}`, x.value);
     }
     return m;
   }, [values]);
 
-  async function refresh() {
-    const [p, v] = await Promise.all([
-      participantsRepo.list(mode),
-      resultsRepo.list(mode),
-    ]);
-    setParticipants(p);
+  async function refreshValues() {
+    const v = await resultsRepo.list(mode);
     setValues(v);
   }
 
-  async function addParticipant() {
-    const name = newName.trim();
+  async function refreshParticipants() {
+    const p = await participantsRepo.list(mode);
+    setParticipants(p);
+  }
+
+  async function onAddParticipant() {
+    const name = nameInput.trim();
     if (!name) return;
 
-    await participantsRepo.add(name, mode);
-    setNewName("");
-    await refresh();
+    await participantsRepo.add(mode, name);
+    setNameInput("");
+    await refreshParticipants();
   }
 
-  async function removeParticipant(participantId: string) {
-    if (!confirm("Bu katılımcı silinsin mi?")) return;
-
-    await participantsRepo.remove(participantId, mode);
-    await resultsRepo.removeByParticipant(mode, participantId);
-    await refresh();
+  async function onDeleteParticipant(id: string) {
+    await participantsRepo.remove(mode, id);
+    await resultsRepo.removeParticipant(mode, id);
+    await Promise.all([refreshParticipants(), refreshValues()]);
   }
 
-  async function updateParticipantName(participantId: string, name: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-
-    await participantsRepo.updateName(participantId, trimmed, mode);
-    await refresh();
+  async function onRenameParticipant(id: string, name: string) {
+    await participantsRepo.rename(mode, id, name);
+    await refreshParticipants();
   }
 
-  async function upsertValue(
+  async function onChangeStageValue(
     participantId: string,
     stageId: string,
-    raw: string
+    raw: string,
   ) {
-    const s = raw.trim();
-    const value =
-      s === "" ? null : Number.isFinite(Number(s)) ? Number(s) : null;
+    // ✅ UI-level eksi engeli + boşsa null
+    const v =
+      raw.trim() === "" ? null : Math.max(0, Number(raw.replace(",", ".")));
 
-    await resultsRepo.upsert({
-      mode,
-      participantId,
-      stageId,
-      value,
-    });
-
-    // UI hızlı güncellensin diye local state’i de güncelle
-    setValues((prev) => {
-      const next = prev.filter(
-        (x) => !(x.participantId === participantId && x.stageId === stageId)
-      );
-      next.push({ participantId, stageId, value });
-      return next;
-    });
+    await resultsRepo.set(mode, participantId, stageId, v);
+    await refreshValues();
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: "24px auto", padding: "0 16px" }}>
-      {/* Add */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+    <div style={{ maxWidth: 1200, margin: "18px auto", padding: "0 18px" }}>
+      <div style={topRow}>
         <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
+          value={nameInput}
+          onChange={(e) => setNameInput(e.target.value)}
           placeholder="Katılımcı adı"
-          style={input}
+          style={nameInputStyle}
         />
-        <button onClick={addParticipant} style={btnPrimary}>
+        <button onClick={onAddParticipant} style={btnPrimary}>
           Ekle
         </button>
       </div>
 
-      {/* List */}
       {participants.length === 0 ? (
-        <div style={{ color: "#6B7280" }}>Henüz katılımcı yok.</div>
+        <div style={{ color: "#6B7280", marginTop: 18 }}>
+          Henüz katılımcı yok.
+        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "grid", gap: 16, marginTop: 18 }}>
           {participants.map((p) => (
             <div key={p.id} style={card}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={cardHeader}>
                 <input
                   defaultValue={p.name}
-                  onBlur={(e) => updateParticipantName(p.id, e.target.value)}
-                  style={{ ...input, maxWidth: 320, fontWeight: 800 }}
+                  onBlur={(e) => onRenameParticipant(p.id, e.target.value)}
+                  style={nameEdit}
                 />
                 <button
-                  onClick={() => removeParticipant(p.id)}
+                  onClick={() => onDeleteParticipant(p.id)}
                   style={btnDanger}
                 >
                   Sil
                 </button>
               </div>
 
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {STAGES.map((stage) => {
-                  const v = valueMap.get(`${p.id}:${stage.id}`) ?? null;
+              <div style={stageGrid}>
+                {stages.map((s) => {
+                  const v = valueMap.get(`${p.id}:${s.id}`) ?? null;
 
                   return (
-                    <div key={stage.id} style={row}>
-                      <div style={{ fontWeight: 800 }}>{stage.title}</div>
+                    <div key={s.id} style={stageRow}>
+                      <div style={stageTitle}>
+                        {s.title}
+                        <span style={stageWeight}>
+                          %{Math.round(s.weight * 100)}
+                        </span>
+                      </div>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          alignItems: "center",
-                        }}
-                      >
+                      <div style={stageRight}>
                         <input
-                          defaultValue={v ?? ""}
-                          placeholder="dk"
                           type="number"
+                          inputMode="decimal"
+                          min={0}
                           step="0.01"
-                          onBlur={(e) =>
-                            upsertValue(p.id, stage.id, e.target.value)
+                          placeholder="sn"
+                          defaultValue={v ?? ""}
+                          onChange={(e) =>
+                            onChangeStageValue(p.id, s.id, e.target.value)
                           }
-                          style={{ ...input, width: 120 }}
+                          onWheel={(e) =>
+                            (e.currentTarget as HTMLInputElement).blur()
+                          }
+                          style={numInput}
                         />
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#6B7280",
-                            minWidth: 70,
-                          }}
-                        >
-                          {v == null ? "—" : formatTime(v)}
+                        <div style={valueHint}>
+                          {v == null ? "-" : `${formatTime(v)} `}
                         </div>
                       </div>
                     </div>
@@ -182,27 +175,17 @@ export default function ParticipantsClient({ mode }: { mode: Mode }) {
   );
 }
 
-/* styles */
+/* ---------------- styles ---------------- */
 
-const card: React.CSSProperties = {
-  border: "1px solid #E5E7EB",
-  borderRadius: 16,
-  background: "white",
-  padding: 16,
-  maxWidth: 980,
-};
-
-const row: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 240px",
+const topRow: React.CSSProperties = {
+  display: "flex",
   gap: 12,
   alignItems: "center",
-  padding: "8px 0",
 };
 
-const input: React.CSSProperties = {
-  height: 40,
-  padding: "0 12px",
+const nameInputStyle: React.CSSProperties = {
+  width: 240,
+  padding: "10px 12px",
   borderRadius: 12,
   border: "1px solid #E5E7EB",
   outline: "none",
@@ -210,23 +193,101 @@ const input: React.CSSProperties = {
 };
 
 const btnPrimary: React.CSSProperties = {
-  height: 40,
-  padding: "0 14px",
+  padding: "10px 16px",
   borderRadius: 12,
   border: "1px solid #111827",
   background: "#111827",
   color: "white",
-  fontWeight: 900,
+  fontWeight: 800,
   cursor: "pointer",
 };
 
+const card: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  background: "white",
+};
+
+const cardHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 14,
+};
+
+const nameEdit: React.CSSProperties = {
+  fontSize: 16,
+  fontWeight: 900,
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  padding: "10px 12px",
+  width: 260,
+  outline: "none",
+};
+
 const btnDanger: React.CSSProperties = {
-  height: 40,
-  padding: "0 14px",
+  padding: "10px 14px",
   borderRadius: 12,
   border: "1px solid #DC2626",
   background: "#DC2626",
   color: "white",
   fontWeight: 900,
   cursor: "pointer",
+};
+
+const stageGrid: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+
+const stageRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const stageTitle: React.CSSProperties = {
+  fontWeight: 800,
+  color: "#111827",
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const stageWeight: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#6B7280",
+};
+
+const stageRight: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+};
+
+const numInput: React.CSSProperties = {
+  width: 140,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid #E5E7EB",
+  outline: "none",
+  fontSize: 14,
+};
+
+const valueHint: React.CSSProperties = {
+  width: 90,
+  fontSize: 13,
+  color: "#6B7280",
+  fontWeight: 700,
+  textAlign: "left",
+};
+
+const footNote: React.CSSProperties = {
+  marginTop: 12,
+  fontSize: 12,
+  color: "#6B7280",
 };
