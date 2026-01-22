@@ -1,23 +1,45 @@
-import Link from "next/link";
-import { cookies } from "next/headers";
-import AppHeaderClient from "./AppHeaderClient";
-import { sessionCookieName, isAuthedCookie } from "@/lib/auth";
+// src/components/AppHeader.tsx
+import AppHeaderClient from "@/components/AppHeaderClient";
+import { isAuthed } from "@/lib/auth-server";
+
+type Mode = "piyade" | "keskin";
+
+type Props = {
+  mode?: Mode;
+
+  // Etaplar her yerde görünsün (default zaten true)
+  showStages?: boolean;
+
+  // Katılımcılar linki sadece admin layout’ta istenirse ve authed ise görünsün
+  showParticipantsLink?: boolean;
+
+  // Çıkış sadece admin layout’ta istenirse ve authed ise görünsün
+  showLogout?: boolean;
+
+  brandTitle?: string;
+};
 
 export default async function AppHeader({
+  mode = "piyade",
+  showStages = true,
+  showParticipantsLink = false,
   showLogout = false,
-}: {
-  showLogout?: boolean;
-}) {
-  const store = await cookies(); // Next 15/16: cookies() async dönebiliyor
-  const cookie = store.get(sessionCookieName)?.value;
-  const isAuthed = isAuthedCookie(cookie);
+  brandTitle = "Swat Challange Mülakat Paneli",
+}: Props) {
+  const authed = await isAuthed();
+
+  const brandHref =
+    mode === "keskin" ? "/keskin/dashboard" : "/piyade/dashboard";
 
   return (
     <AppHeaderClient
-      isAuthed={isAuthed}
+      mode={mode}
+      isAuthed={authed}
+      showStages={showStages}
+      showParticipantsLink={showParticipantsLink}
       showLogout={showLogout}
-      brandHref="/piyade/dashboard"
-      brandTitle="Swat Challange Mülakat Paneli"
+      brandHref={brandHref}
+      brandTitle={brandTitle}
     />
   );
 }

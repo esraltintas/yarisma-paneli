@@ -1,97 +1,103 @@
+// src/components/AppHeaderClient.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import { STAGES } from "@/lib/stages";
 
+type Mode = "piyade" | "keskin";
+
+type Props = {
+  mode: Mode;
+  isAuthed: boolean;
+
+  showStages: boolean;
+  showParticipantsLink: boolean;
+  showLogout: boolean;
+
+  brandHref: string;
+  brandTitle: string;
+};
+
 export default function AppHeaderClient({
+  mode,
   isAuthed,
+  showStages,
+  showParticipantsLink,
   showLogout,
   brandHref,
   brandTitle,
-}: {
-  isAuthed: boolean;
-  showLogout: boolean; // sadece participants sayfasında true vereceğiz
-  brandHref: string;
-  brandTitle: string;
-}) {
-  const pathname = usePathname();
+}: Props) {
   const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  // dışarı tıkla kapan
+  const stageItems = useMemo(() => {
+    // Şimdilik tek STAGES seti var; keskin farklı stage setine geçersen burada mode’a göre ayırırsın.
+    return STAGES;
+  }, []);
+
+  // ✅ dışarı tıklayınca dropdown kapansın
   useEffect(() => {
-    function onDown(e: MouseEvent) {
-      const el = menuRef.current;
+    function onDocDown(e: MouseEvent) {
+      const el = wrapRef.current;
       if (!el) return;
       if (!el.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
   }, []);
-
-  const activeStageId = useMemo(() => {
-    // /piyade/stages/:id
-    const m = pathname?.match(/\/piyade\/stages\/([^/]+)/);
-    return m?.[1] ?? null;
-  }, [pathname]);
 
   return (
     <header style={wrap}>
-      <div style={inner}>
+      <div style={inner} ref={wrapRef}>
         <Link href={brandHref} style={brand}>
           {brandTitle}
         </Link>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          {/* Etaplar HEP kalsın (login gerekmez) */}
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setOpen((s) => !s)}
-              style={btnGhost}
-              aria-expanded={open}
-            >
-              Etaplar <span style={{ fontSize: 14 }}>▾</span>
-            </button>
+        <div style={right}>
+          {/* ✅ Etaplar HER ZAMAN görünür */}
+          {showStages && (
+            <div style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                style={btnGhost}
+                aria-expanded={open}
+              >
+                Etaplar <span style={{ marginLeft: 6 }}>▼</span>
+              </button>
 
-            {open && (
-              <div style={menu}>
-                {STAGES.map((s) => {
-                  const active = activeStageId === s.id;
-                  return (
+              {open && (
+                <div style={dropdown}>
+                  {stageItems.map((s) => (
                     <Link
                       key={s.id}
-                      href={`/piyade/stages/${s.id}`}
-                      style={{
-                        ...menuItem,
-                        ...(active ? menuItemActive : null),
-                      }}
-                      onClick={() => setOpen(false)}
+                      href={`/${mode}/stages/${s.id}`}
+                      style={dropdownItem}
+                      onClick={() => setOpen(false)} // ✅ seçince kapansın
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 10,
-                        }}
-                      >
-                        <span>{s.title}</span>
-                        <span style={pct}>%{Math.round(s.weight * 100)}</span>
-                      </div>
+                      <span style={{ fontWeight: 900 }}>{s.title}</span>
+                      <span style={percentText}>
+                        %{Math.round(s.weight * 100)}
+                      </span>
                     </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Katılımcılar linki NAVBAR’da yok (sen istemiyorsun) */}
-          {/* Logout SADECE participants sayfasında görünsün */}
+          {/* Katılımcılar sadece admin’de istenirse + authed ise */}
+          {showParticipantsLink && isAuthed && (
+            <Link href={`/${mode}/participants`} style={btnGhost}>
+              Katılımcılar
+            </Link>
+          )}
+
+          {/* Çıkış sadece admin’de istenirse + authed ise */}
           {showLogout && isAuthed && (
             <form action="/api/auth/logout" method="post">
-              <button type="submit" style={btn}>
+              <button type="submit" style={btnDark}>
                 Çıkış
               </button>
             </form>
@@ -101,6 +107,8 @@ export default function AppHeaderClient({
     </header>
   );
 }
+
+/* ---------------- styles ---------------- */
 
 const wrap: React.CSSProperties = {
   borderBottom: "1px solid #E5E7EB",
@@ -118,9 +126,15 @@ const inner: React.CSSProperties = {
 
 const brand: React.CSSProperties = {
   fontWeight: 900,
-  fontSize: 18,
-  textDecoration: "none",
+  fontSize: 20,
   color: "#111827",
+  textDecoration: "none",
+};
+
+const right: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
 };
 
 const btnGhost: React.CSSProperties = {
@@ -130,13 +144,11 @@ const btnGhost: React.CSSProperties = {
   background: "white",
   color: "#111827",
   fontWeight: 800,
+  textDecoration: "none",
   cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
 };
 
-const btn: React.CSSProperties = {
+const btnDark: React.CSSProperties = {
   padding: "10px 14px",
   borderRadius: 12,
   border: "1px solid #111827",
@@ -146,33 +158,30 @@ const btn: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const menu: React.CSSProperties = {
+const dropdown: React.CSSProperties = {
   position: "absolute",
+  top: "calc(100% + 10px)",
   right: 0,
-  top: "calc(100% + 8px)",
   width: 360,
-  background: "white",
+  borderRadius: 14,
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+  background: "white",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.10)",
   overflow: "hidden",
   zIndex: 50,
 };
 
-const menuItem: React.CSSProperties = {
-  display: "block",
-  padding: "12px 14px",
+const dropdownItem: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "14px 16px",
   textDecoration: "none",
   color: "#111827",
-  fontWeight: 800,
   borderBottom: "1px solid #F3F4F6",
 };
 
-const menuItemActive: React.CSSProperties = {
-  background: "#F3F4F6",
-};
-
-const pct: React.CSSProperties = {
+const percentText: React.CSSProperties = {
   color: "#6B7280",
-  fontWeight: 800,
+  fontWeight: 900,
 };
