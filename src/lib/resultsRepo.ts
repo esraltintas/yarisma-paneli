@@ -1,55 +1,42 @@
 // src/lib/resultsRepo.ts
-export type Mode = "piyade" | "keskin";
-
 export type StageValue = {
   participantId: string;
   stageId: string;
-  value: number | null;
+  value: number | null; // saniye
 };
 
-function apiBase(mode: Mode) {
-  return `/api/${mode}`;
-}
+type Mode = "piyade";
 
 export const resultsRepo = {
   async list(mode: Mode): Promise<StageValue[]> {
-    const res = await fetch(`${apiBase(mode)}/results`, { cache: "no-store" });
+    const res = await fetch(`/api/${mode}/results`, { cache: "no-store" });
     if (!res.ok) throw new Error("results list failed");
     return (await res.json()) as StageValue[];
   },
 
-  /**
-   * tek hücre upsert (participantId + stageId)
-   */
+  // ✅ Route.ts POST bekliyor (PUT/PATCH değil)
   async setValue(
     mode: Mode,
     participantId: string,
     stageId: string,
     value: number | null,
   ): Promise<void> {
-    const res = await fetch(`${apiBase(mode)}/results`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
+    const res = await fetch(`/api/${mode}/results`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantId, stageId, value }),
     });
 
     if (!res.ok) throw new Error("results setValue failed");
   },
 
-  /**
-   * katılımcı silinince onun tüm sonuçlarını da sil
-   * (Client tarafındaki runtime hatanın sebebi buydu: bu fonksiyon yoktu.)
-   */
+  // ✅ Route.ts DELETE ?participantId=... bekliyor
   async removeParticipant(mode: Mode, participantId: string): Promise<void> {
-    const res = await fetch(
-      `${apiBase(mode)}/results/participant/${participantId}`,
-      {
-        method: "DELETE",
-        cache: "no-store",
-      },
-    );
+    const url = `/api/${mode}/results?participantId=${encodeURIComponent(
+      participantId,
+    )}`;
 
+    const res = await fetch(url, { method: "DELETE" });
     if (!res.ok) throw new Error("results removeParticipant failed");
   },
 };

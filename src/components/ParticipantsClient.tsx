@@ -1,28 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { participantsRepo, type Participant } from "@/lib/participantsRepo";
 import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { STAGES } from "@/lib/stages";
 import { formatSecondsToMinSec } from "@/lib/format";
 
-type Mode = "piyade"; // şimdilik sadece piyade
-
-type Props = {
-  mode: Mode;
-};
+type Mode = "piyade";
+type Props = { mode: Mode };
 
 function parseNumberSafe(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
 
-  // TR input: 1,25 -> 1.25
   const normalized = s.replace(",", ".");
   const n = Number(normalized);
 
   if (!Number.isFinite(n)) return null;
-  if (n < 0) return 0; // ✅ eksiye izin yok
+  if (n < 0) return 0; // ✅ eksi yok
   return n;
+}
+
+function keyOf(pid: string, sid: string) {
+  return `${pid}:${sid}`;
 }
 
 export default function ParticipantsClient({ mode }: Props) {
@@ -30,7 +30,12 @@ export default function ParticipantsClient({ mode }: Props) {
   const [values, setValues] = useState<StageValue[]>([]);
   const [nameInput, setNameInput] = useState("");
 
-  // load
+  // ✅ Kullanıcı yazarken anında gösterilecek local draft
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  // ✅ Debounce timer’lar (field bazlı)
+  const saveTimers = useRef<Record<string, number>>({});
+
   useEffect(() => {
     let cancelled = false;
 
@@ -47,6 +52,11 @@ export default function ParticipantsClient({ mode }: Props) {
 
     return () => {
       cancelled = true;
+      // cleanup timers
+      for (const k of Object.keys(saveTimers.current)) {
+        window.clearTimeout(saveTimers.current[k]);
+      }
+      saveTimers.current = {};
     };
   }, [mode]);
 
@@ -54,7 +64,7 @@ export default function ParticipantsClient({ mode }: Props) {
     const m = new Map<string, number>();
     for (const x of values) {
       if (x.value == null) continue;
-      m.set(`${x.participantId}:${x.stageId}`, x.value);
+      m.set(keyOf(x.participantId, x.stageId), x.value);
     }
     return m;
   }, [values]);
@@ -75,39 +85,80 @@ export default function ParticipantsClient({ mode }: Props) {
 
     await participantsRepo.add(mode, name);
     setNameInput("");
-
     await refreshParticipants();
   }
 
   async function onDeleteParticipant(id: string) {
-    // ✅ önce participant sil
     await participantsRepo.remove(mode, id);
-
-    // ✅ participant’a bağlı tüm stage sonuçlarını da temizle
     await resultsRepo.removeParticipant(mode, id);
-
     await Promise.all([refreshParticipants(), refreshValues()]);
   }
 
   async function onChangeName(id: string, nextName: string) {
-    await participantsRepo.update(mode, id, nextName);
+    await participantsRepo.updateName(mode, id, nextName);
     await refreshParticipants();
   }
 
-  async function onChangeStageValue(
+  function scheduleSave(participantId: string, stageId: string, raw: string) {
+    const k = keyOf(participantId, stageId);
+
+    // önce varsa eski timer’ı iptal et
+    if (saveTimers.current[k]) window.clearTimeout(saveTimers.current[k]);
+
+    // 350ms sonra kaydet (debounce)
+    saveTimers.current[k] = window.setTimeout(async () => {
+      try {
+        const v = parseNumberSafe(raw);
+        await resultsRepo.setValue(mode, participantId, stageId, v);
+        await refreshValues();
+      } catch (e) {
+        console.error(e);
+        // istersen burada toast vb. gösterebilirsin
+      }
+    }, 350);
+  }
+
+  function onChangeStageValue(
     participantId: string,
     stageId: string,
     raw: string,
   ) {
-    const v = parseNumberSafe(raw); // ✅ null/0/positive
+    const k = keyOf(participantId, stageId);
 
-    await resultsRepo.set(mode, participantId, stageId, v);
-    await refreshValues();
+    // ✅ kullanıcı yazarken UI anında güncellenir
+    setDrafts((prev) => ({ ...prev, [k]: raw }));
+
+    // ✅ arkada debounce ile DB’ye yaz
+    scheduleSave(participantId, stageId, raw);
+  }
+
+  function getInputValue(participantId: string, stageId: string) {
+    const k = keyOf(participantId, stageId);
+
+    // draft varsa onu göster
+    if (drafts[k] != null) return drafts[k];
+
+    // yoksa DB değerini göster
+    const current = valueMap.get(k) ?? null;
+    return current == null ? "" : String(current).replace(".", ",");
+  }
+
+  function getPreview(participantId: string, stageId: string) {
+    const k = keyOf(participantId, stageId);
+
+    // draft varsa preview’u draft’tan hesapla (hızlı his)
+    const d = drafts[k];
+    if (d != null) {
+      const v = parseNumberSafe(d);
+      return v == null ? "-" : formatSecondsToMinSec(v);
+    }
+
+    const current = valueMap.get(k) ?? null;
+    return current == null ? "-" : formatSecondsToMinSec(current);
   }
 
   return (
     <div style={{ maxWidth: 1200, margin: "18px auto", padding: "0 18px" }}>
-      {/* add */}
       <div style={topRow}>
         <input
           placeholder="Katılımcı adı"
@@ -135,14 +186,12 @@ export default function ParticipantsClient({ mode }: Props) {
         >
           {participants.map((p) => (
             <div key={p.id} style={card}>
-              {/* header */}
               <div style={cardHeader}>
                 <input
                   value={p.name}
                   onChange={(e) => onChangeName(p.id, e.target.value)}
                   style={nameBox}
                 />
-
                 <button
                   onClick={() => onDeleteParticipant(p.id)}
                   style={deleteBtn}
@@ -151,47 +200,34 @@ export default function ParticipantsClient({ mode }: Props) {
                 </button>
               </div>
 
-              {/* stages */}
               <div style={{ display: "grid", gap: 14 }}>
-                {STAGES.map((s) => {
-                  const current = valueMap.get(`${p.id}:${s.id}`) ?? null;
-
-                  return (
-                    <div key={s.id} style={stageRow}>
-                      {/* stage title */}
-                      <div style={stageLeft}>
-                        <div style={stageTitle}>
-                          {s.title}{" "}
-                          <span style={weightText}>
-                            %{Math.round(s.weight * 100)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* input + minute preview */}
-                      <div style={stageRight}>
-                        <input
-                          inputMode="decimal"
-                          placeholder="sn"
-                          value={
-                            current == null
-                              ? ""
-                              : String(current).replace(".", ",")
-                          }
-                          onChange={(e) =>
-                            onChangeStageValue(p.id, s.id, e.target.value)
-                          }
-                          style={stageInput}
-                        />
-                        <span style={minutePreview}>
-                          {current == null
-                            ? "-"
-                            : formatSecondsToMinSec(current)}
+                {STAGES.map((s) => (
+                  <div key={s.id} style={stageRow}>
+                    <div style={stageLeft}>
+                      <div style={stageTitle}>
+                        {s.title}{" "}
+                        <span style={weightText}>
+                          %{Math.round(s.weight * 100)}
                         </span>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div style={stageRight}>
+                      <input
+                        inputMode="decimal"
+                        placeholder="sn"
+                        value={getInputValue(p.id, s.id)}
+                        onChange={(e) =>
+                          onChangeStageValue(p.id, s.id, e.target.value)
+                        }
+                        style={stageInput}
+                      />
+                      <span style={minutePreview}>
+                        {getPreview(p.id, s.id)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
