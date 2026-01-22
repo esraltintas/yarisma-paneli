@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Mode {
+  piyade
+  keskin
+}
+
+model Participant {
+  id        String   @id @default(cuid())
+  mode      Mode     @default(piyade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results   StageResult[]
+  @@index([mode])
+}
+
+model StageResult {
+  id            String   @id @default(cuid())
+  mode          Mode     @default(piyade)
+  participantId String
+  stageId       String
+  valueSec      Float?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([mode, participantId, stageId])
+  @@index([mode, stageId])
+}
