@@ -1,5 +1,5 @@
 // src/lib/participantsRepo.ts
-export type Mode = "piyade" | "keskin"; // şimdilik piyade kullanıyorsun ama yapı bozulmasın
+export type Mode = "piyade"; // şimdilik piyade kullanıyorsun ama yapı bozulmasın
 
 export type Participant = {
   id: string;

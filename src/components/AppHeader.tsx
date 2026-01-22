@@ -2,7 +2,7 @@
 import AppHeaderClient from "@/components/AppHeaderClient";
 import { isAuthed } from "@/lib/auth-server";
 
-type Mode = "piyade" | "keskin";
+export type Mode = "piyade";
 
 type Props = {
   mode?: Mode;
@@ -28,8 +28,7 @@ export default async function AppHeader({
 }: Props) {
   const authed = await isAuthed();
 
-  const brandHref =
-    mode === "keskin" ? "/keskin/dashboard" : "/piyade/dashboard";
+  const brandHref = "/piyade/dashboard";
 
   return (
     <AppHeaderClient

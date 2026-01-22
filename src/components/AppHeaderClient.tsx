@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGES } from "@/lib/stages";
 
-type Mode = "piyade" | "keskin";
+export type Mode = "piyade";
 
 type Props = {
   mode: Mode;
