@@ -1,42 +1,63 @@
 // src/lib/resultsRepo.ts
+export type Mode = "piyade"; // şimdilik
+
 export type StageValue = {
   participantId: string;
   stageId: string;
   value: number | null; // saniye
 };
 
-type Mode = "piyade";
+async function readJsonOrThrow(res: Response, errMsg: string) {
+  if (res.ok) return res.json();
+
+  // Hata detayını almaya çalış (varsa)
+  let detail = "";
+  try {
+    const data = await res.json();
+    detail = data?.error ? ` (${data.error})` : "";
+  } catch {
+    // ignore
+  }
+
+  throw new Error(`${errMsg} [${res.status}]${detail}`);
+}
 
 export const resultsRepo = {
   async list(mode: Mode): Promise<StageValue[]> {
-    const res = await fetch(`/api/${mode}/results`, { cache: "no-store" });
-    if (!res.ok) throw new Error("results list failed");
-    return (await res.json()) as StageValue[];
+    const qs = new URLSearchParams({ mode });
+    const res = await fetch(`/api/piyade/results?${qs.toString()}`, {
+      cache: "no-store",
+    });
+    return (await readJsonOrThrow(res, "results list failed")) as StageValue[];
   },
 
-  // ✅ Route.ts POST bekliyor (PUT/PATCH değil)
   async setValue(
     mode: Mode,
     participantId: string,
     stageId: string,
     value: number | null,
   ): Promise<void> {
-    const res = await fetch(`/api/${mode}/results`, {
+    const res = await fetch("/api/piyade/results", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ participantId, stageId, value }),
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ mode, participantId, stageId, value }),
     });
 
-    if (!res.ok) throw new Error("results setValue failed");
+    if (!res.ok) {
+      await readJsonOrThrow(res, "results setValue failed");
+    }
   },
 
-  // ✅ Route.ts DELETE ?participantId=... bekliyor
   async removeParticipant(mode: Mode, participantId: string): Promise<void> {
-    const url = `/api/${mode}/results?participantId=${encodeURIComponent(
-      participantId,
-    )}`;
+    const qs = new URLSearchParams({ mode, participantId });
+    const res = await fetch(`/api/piyade/results?${qs.toString()}`, {
+      method: "DELETE",
+      cache: "no-store",
+    });
 
-    const res = await fetch(url, { method: "DELETE" });
-    if (!res.ok) throw new Error("results removeParticipant failed");
+    if (!res.ok) {
+      await readJsonOrThrow(res, "results removeParticipant failed");
+    }
   },
 };

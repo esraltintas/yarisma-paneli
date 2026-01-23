@@ -1,17 +1,21 @@
 // src/app/login/page.tsx
 import LoginClient from "./LoginClient";
 
-export const dynamic = "force-dynamic";
+type SP = { next?: string | string[] };
 
-type Props = {
-  searchParams?: Record<string, string | string[] | undefined>;
-};
+export default async function Page({
+  searchParams,
+}: {
+  // Next 16'da bazen Promise geliyor, o yüzden ikisini de karşılıyoruz
+  searchParams: Promise<SP> | SP;
+}) {
+  const sp = await searchParams;
+  const nextRaw = sp?.next;
 
-export default function Page({ searchParams }: Props) {
   const next =
-    typeof searchParams?.next === "string" && searchParams.next.trim()
-      ? searchParams.next
+    typeof nextRaw === "string" && nextRaw.trim()
+      ? nextRaw
       : "/piyade/dashboard";
 
-  return <LoginClient next={next} />;
+  return <LoginClient nextPath={next} />;
 }

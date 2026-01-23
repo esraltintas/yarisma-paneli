@@ -1,29 +1,33 @@
-// proxy.ts
-import { NextResponse } from "next/server";
+// proxy.ts (Next.js 16+)
 import type { NextRequest } from "next/server";
-import { sessionCookieName, isAuthedCookie } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { isAuthedCookie, sessionCookieName } from "@/lib/auth";
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const isAdminRoute = pathname.startsWith("/piyade/participants");
+  // sadece admin route + write api korunacak
+  const isParticipantsPage = pathname.startsWith("/piyade/participants");
+  const isParticipantsApi = pathname.startsWith("/api/piyade/participants");
+  const isResultsApi = pathname.startsWith("/api/piyade/results");
+
+  // sadece POST/PUT/PATCH/DELETE gibi yazma işlemlerinde results API auth ister
+  const method = req.method.toUpperCase();
+  const isWriteMethod = method !== "GET";
+
+  const isAdminRoute =
+    isParticipantsPage ||
+    (isParticipantsApi && isWriteMethod) ||
+    (isResultsApi && isWriteMethod);
+
   if (!isAdminRoute) return NextResponse.next();
 
   const cookie = req.cookies.get(sessionCookieName)?.value;
-
-  // cookie yoksa direkt login
-  if (!cookie) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // ✅ async doğrula
-  const authed = await isAuthedCookie(cookie);
+  const authed = await isAuthedCookie(cookie); // ✅ await şart
 
   if (authed) return NextResponse.next();
 
+  // login'e yönlendir + next paramı
   const url = req.nextUrl.clone();
   url.pathname = "/login";
   url.searchParams.set("next", pathname);
@@ -31,5 +35,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/piyade/participants/:path*"],
+  matcher: ["/piyade/participants/:path*", "/api/piyade/:path*"],
 };
