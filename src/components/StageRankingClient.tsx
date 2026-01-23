@@ -7,6 +7,7 @@ import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { stagePointsByRank } from "@/lib/scoring";
 import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 import { formatTime } from "@/lib/format";
+import { maskName } from "@/lib/maskName";
 
 type Row = {
   participant: Participant;
@@ -136,7 +137,7 @@ export default function StageRankingClient({
       lines.push(
         [r.rank ?? "", r.participant.name, valueOut, r.points ?? ""]
           .map(escape)
-          .join(sep)
+          .join(sep),
       );
     }
 
@@ -180,7 +181,7 @@ export default function StageRankingClient({
             {rows.map((r) => (
               <tr key={r.participant.id}>
                 <td style={td}>{r.rank ?? "—"}</td>
-                <td style={td}>{r.participant.name}</td>
+                <td style={td}>{maskName(r.participant.name)}</td>
                 <td style={td}>
                   {r.value == null ? "—" : formatTime(r.value)}
                 </td>

@@ -6,6 +6,7 @@ import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { stagePointsByRank } from "@/lib/scoring";
 import { formatTime } from "@/lib/format";
 import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
+import { maskName } from "@/lib/maskName";
 
 type StageCell = {
   value: number | null; // time (sn)
@@ -276,7 +277,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
             {overallRows.map((row) => (
               <tr key={row.participant.id}>
                 <td style={tdSticky}>
-                  {row.rank}. {row.participant.name}
+                  {row.rank}. {maskName(row.participant.name)}
                 </td>
 
                 {STAGES.map((stage) => {
