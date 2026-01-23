@@ -14,7 +14,14 @@ export async function isAuthedCookie(cookieValue: string | undefined | null) {
   return cookieValue === sessionCookieValue();
 }
 
-// Login şifresi (env'den okunur). Yoksa fallback: "1234"
+export function getAdminUsername() {
+  const u = process.env.AUTH_USERNAME;
+  if (!u) throw new Error("AUTH_USERNAME is missing");
+  return u;
+}
+
 export function getAdminPassword() {
-  return process.env.ADMIN_PASSWORD ?? "1234";
+  const p = process.env.AUTH_PASSWORD;
+  if (!p) throw new Error("AUTH_PASSWORD is missing");
+  return p;
 }

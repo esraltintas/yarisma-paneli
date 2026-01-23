@@ -11,6 +11,12 @@ export async function POST(req: Request) {
   const password = String(body?.password ?? "");
 
   const ok = password === getAdminPassword();
+
+  console.log("ENV CHECK", {
+    AUTH_USERNAME: process.env.AUTH_USERNAME,
+    AUTH_PASSWORD: process.env.AUTH_PASSWORD ? "***" : undefined,
+    AUTH_SECRET: process.env.AUTH_SECRET ? "***" : undefined,
+  });
   if (!ok) {
     return NextResponse.json(
       { ok: false, message: "Hatalı şifre" },
