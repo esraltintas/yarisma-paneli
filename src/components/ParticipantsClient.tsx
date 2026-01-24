@@ -1,28 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { participantsRepo, type Participant } from "@/lib/participantsRepo";
 import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { STAGES } from "@/lib/stages";
 import { formatSecondsToMinSec } from "@/lib/format";
 
 type Mode = "piyade";
-type Props = { mode: Mode };
+
+type Props = {
+  mode: Mode;
+};
 
 function parseNumberSafe(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
 
+  // TR input: 1,25 -> 1.25
   const normalized = s.replace(",", ".");
   const n = Number(normalized);
 
   if (!Number.isFinite(n)) return null;
-  if (n < 0) return 0; // ✅ eksi yok
+  if (n < 0) return 0;
   return n;
 }
 
-function keyOf(pid: string, sid: string) {
-  return `${pid}:${sid}`;
+function toIsoTime(t: string | Date | undefined): number {
+  if (!t) return 0;
+  const d = typeof t === "string" ? new Date(t) : t;
+  const ms = d.getTime();
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 export default function ParticipantsClient({ mode }: Props) {
@@ -30,11 +37,13 @@ export default function ParticipantsClient({ mode }: Props) {
   const [values, setValues] = useState<StageValue[]>([]);
   const [nameInput, setNameInput] = useState("");
 
-  // ✅ Kullanıcı yazarken anında gösterilecek local draft
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // draft state (UI akıcı)
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  const [stageDrafts, setStageDrafts] = useState<Record<string, string>>({});
 
-  // ✅ Debounce timer’lar (field bazlı)
-  const saveTimers = useRef<Record<string, number>>({});
+  // debounce timers
+  const nameTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const stageTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -52,19 +61,22 @@ export default function ParticipantsClient({ mode }: Props) {
 
     return () => {
       cancelled = true;
-      // cleanup timers
-      for (const k of Object.keys(saveTimers.current)) {
-        window.clearTimeout(saveTimers.current[k]);
-      }
-      saveTimers.current = {};
     };
   }, [mode]);
 
+  // newest first
+  const orderedParticipants = useMemo(() => {
+    return [...participants].sort(
+      (a, b) => toIsoTime(b.createdAt) - toIsoTime(a.createdAt),
+    );
+  }, [participants]);
+
+  // value map
   const valueMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const x of values) {
       if (x.value == null) continue;
-      m.set(keyOf(x.participantId, x.stageId), x.value);
+      m.set(`${x.participantId}:${x.stageId}`, x.value);
     }
     return m;
   }, [values]);
@@ -91,77 +103,99 @@ export default function ParticipantsClient({ mode }: Props) {
   async function onDeleteParticipant(id: string) {
     await participantsRepo.remove(mode, id);
     await resultsRepo.removeParticipant(mode, id);
+
+    // draft temizle
+    setNameDrafts((prev) => {
+      const n = { ...prev };
+      delete n[id];
+      return n;
+    });
+
+    setStageDrafts((prev) => {
+      const n = { ...prev };
+      for (const k of Object.keys(n)) {
+        if (k.startsWith(`${id}:`)) delete n[k];
+      }
+      return n;
+    });
+
     await Promise.all([refreshParticipants(), refreshValues()]);
   }
 
-  async function onChangeName(id: string, nextName: string) {
-    await participantsRepo.updateName(mode, id, nextName);
-    await refreshParticipants();
-  }
+  function onChangeNameLocal(id: string, nextName: string) {
+    // UI anlık
+    setNameDrafts((prev) => ({ ...prev, [id]: nextName }));
 
-  function scheduleSave(participantId: string, stageId: string, raw: string) {
-    const k = keyOf(participantId, stageId);
+    // debounce server write
+    const t = nameTimers.current[id];
+    if (t) clearTimeout(t);
 
-    // önce varsa eski timer’ı iptal et
-    if (saveTimers.current[k]) window.clearTimeout(saveTimers.current[k]);
+    nameTimers.current[id] = setTimeout(async () => {
+      const name = nextName.trim();
 
-    // 350ms sonra kaydet (debounce)
-    saveTimers.current[k] = window.setTimeout(async () => {
       try {
-        const v = parseNumberSafe(raw);
-        await resultsRepo.setValue(mode, participantId, stageId, v);
-        await refreshValues();
+        // boş stringe izin verme (istersen burada allow edebilirsin)
+        if (!name) return;
+
+        await participantsRepo.updateName(mode, id, name);
+        await refreshParticipants();
+
+        // draft’i temizle (server senkron)
+        setNameDrafts((prev) => {
+          const n = { ...prev };
+          delete n[id];
+          return n;
+        });
       } catch (e) {
-        console.error(e);
-        // istersen burada toast vb. gösterebilirsin
+        console.error("participants updateName failed:", e);
+      } finally {
+        delete nameTimers.current[id];
       }
-    }, 350);
+    }, 600);
   }
 
-  function onChangeStageValue(
+  function onChangeStageValueLocal(
     participantId: string,
     stageId: string,
     raw: string,
   ) {
-    const k = keyOf(participantId, stageId);
+    const key = `${participantId}:${stageId}`;
 
-    // ✅ kullanıcı yazarken UI anında güncellenir
-    setDrafts((prev) => ({ ...prev, [k]: raw }));
+    // UI anlık
+    setStageDrafts((prev) => ({ ...prev, [key]: raw }));
 
-    // ✅ arkada debounce ile DB’ye yaz
-    scheduleSave(participantId, stageId, raw);
-  }
+    // debounce server write
+    const t = stageTimers.current[key];
+    if (t) clearTimeout(t);
 
-  function getInputValue(participantId: string, stageId: string) {
-    const k = keyOf(participantId, stageId);
+    stageTimers.current[key] = setTimeout(async () => {
+      try {
+        const v = parseNumberSafe(raw); // null / 0 / positive
+        await resultsRepo.setValue(mode, participantId, stageId, v);
 
-    // draft varsa onu göster
-    if (drafts[k] != null) return drafts[k];
+        // server state'i çek (istersen daha seyrek yaparız)
+        await refreshValues();
 
-    // yoksa DB değerini göster
-    const current = valueMap.get(k) ?? null;
-    return current == null ? "" : String(current).replace(".", ",");
-  }
-
-  function getPreview(participantId: string, stageId: string) {
-    const k = keyOf(participantId, stageId);
-
-    // draft varsa preview’u draft’tan hesapla (hızlı his)
-    const d = drafts[k];
-    if (d != null) {
-      const v = parseNumberSafe(d);
-      return v == null ? "-" : formatSecondsToMinSec(v);
-    }
-
-    const current = valueMap.get(k) ?? null;
-    return current == null ? "-" : formatSecondsToMinSec(current);
+        // draft temizle (server’dan gelen değere bırak)
+        setStageDrafts((prev) => {
+          const n = { ...prev };
+          delete n[key];
+          return n;
+        });
+      } catch (e) {
+        console.error("results setValue failed:", e);
+      } finally {
+        delete stageTimers.current[key];
+      }
+    }, 500);
   }
 
   return (
     <div style={{ maxWidth: 1200, margin: "18px auto", padding: "0 18px" }}>
+      {/* add */}
       <div style={topRow}>
         <input
-          placeholder="Katılımcı adı"
+          placeholder="Katılımcı adı soyadı"
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           style={input}
@@ -171,7 +205,7 @@ export default function ParticipantsClient({ mode }: Props) {
         </button>
       </div>
 
-      {participants.length === 0 ? (
+      {orderedParticipants.length === 0 ? (
         <div style={{ marginTop: 20, color: "#6B7280" }}>
           Henüz katılımcı yok.
         </div>
@@ -184,53 +218,83 @@ export default function ParticipantsClient({ mode }: Props) {
             marginTop: 18,
           }}
         >
-          {participants.map((p) => (
-            <div key={p.id} style={card}>
-              <div style={cardHeader}>
-                <input
-                  value={p.name}
-                  onChange={(e) => onChangeName(p.id, e.target.value)}
-                  style={nameBox}
-                />
-                <button
-                  onClick={() => onDeleteParticipant(p.id)}
-                  style={deleteBtn}
-                >
-                  Sil
-                </button>
-              </div>
+          {orderedParticipants.map((p) => {
+            const shownName = nameDrafts[p.id] ?? p.name;
 
-              <div style={{ display: "grid", gap: 14 }}>
-                {STAGES.map((s) => (
-                  <div key={s.id} style={stageRow}>
-                    <div style={stageLeft}>
-                      <div style={stageTitle}>
-                        {s.title}{" "}
-                        <span style={weightText}>
-                          %{Math.round(s.weight * 100)}
-                        </span>
+            return (
+              <div key={p.id} style={card}>
+                {/* header */}
+                <div style={cardHeader}>
+                  <input
+                    value={shownName}
+                    onChange={(e) => onChangeNameLocal(p.id, e.target.value)}
+                    style={nameBox}
+                  />
+
+                  <button
+                    onClick={() => onDeleteParticipant(p.id)}
+                    style={deleteBtn}
+                  >
+                    Sil
+                  </button>
+                </div>
+
+                {/* stages */}
+                <div style={{ display: "grid", gap: 14 }}>
+                  {STAGES.map((s) => {
+                    const key = `${p.id}:${s.id}`;
+                    const current = valueMap.get(key) ?? null;
+
+                    const shownRaw =
+                      stageDrafts[key] ??
+                      (current == null
+                        ? ""
+                        : String(current).replace(".", ","));
+
+                    // preview hesap (draft varsa draft'tan, yoksa current'tan)
+                    const previewNumber =
+                      stageDrafts[key] != null
+                        ? parseNumberSafe(stageDrafts[key])
+                        : current;
+
+                    return (
+                      <div key={s.id} style={stageRow}>
+                        <div style={stageLeft}>
+                          <div style={stageTitle}>
+                            {s.title}{" "}
+                            <span style={weightText}>
+                              %{Math.round(s.weight * 100)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={stageRight}>
+                          <input
+                            inputMode="decimal"
+                            placeholder="sn"
+                            value={shownRaw}
+                            onChange={(e) =>
+                              onChangeStageValueLocal(
+                                p.id,
+                                s.id,
+                                e.target.value,
+                              )
+                            }
+                            style={stageInput}
+                          />
+                          <span style={minutePreview}>
+                            {previewNumber == null
+                              ? "-"
+                              : formatSecondsToMinSec(previewNumber)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-
-                    <div style={stageRight}>
-                      <input
-                        inputMode="decimal"
-                        placeholder="sn"
-                        value={getInputValue(p.id, s.id)}
-                        onChange={(e) =>
-                          onChangeStageValue(p.id, s.id, e.target.value)
-                        }
-                        style={stageInput}
-                      />
-                      <span style={minutePreview}>
-                        {getPreview(p.id, s.id)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -246,7 +310,7 @@ const topRow: React.CSSProperties = {
 };
 
 const input: React.CSSProperties = {
-  width: 280,
+  width: 320,
   padding: "12px 14px",
   borderRadius: 12,
   border: "1px solid #E5E7EB",
@@ -279,7 +343,7 @@ const cardHeader: React.CSSProperties = {
 };
 
 const nameBox: React.CSSProperties = {
-  width: 300,
+  width: 360,
   padding: "12px 14px",
   borderRadius: 14,
   border: "1px solid #E5E7EB",

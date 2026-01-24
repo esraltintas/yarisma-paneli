@@ -1,26 +1,21 @@
 // src/app/api/piyade/participants/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuthed } from "@/lib/auth-server";
+import { requireAuthedApi, UnauthorizedError } from "@/lib/auth-server";
 
 export async function GET() {
-  try {
-    const items = await prisma.participant.findMany({
-      orderBy: { createdAt: "asc" },
-      select: { id: true, name: true },
-    });
-
-    return NextResponse.json(items);
-  } catch (e) {
-    console.error("GET /api/piyade/participants failed:", e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
-  }
+  // ✅ Dashboard da buradan okuyor olabilir -> GET public kalsın
+  const items = await prisma.participant.findMany({
+    orderBy: { createdAt: "desc" }, // ✅ newest üstte
+    select: { id: true, name: true, createdAt: true },
+  });
+  return NextResponse.json(items);
 }
 
 export async function POST(req: Request) {
-  await requireAuthed(); // ❗️admin şart
-
   try {
+    await requireAuthedApi();
+
     const body = (await req.json().catch(() => null)) as {
       name?: string;
     } | null;
@@ -32,11 +27,14 @@ export async function POST(req: Request) {
 
     const created = await prisma.participant.create({
       data: { name },
-      select: { id: true, name: true },
+      select: { id: true, name: true, createdAt: true },
     });
 
     return NextResponse.json(created, { status: 201 });
-  } catch (e) {
+  } catch (e: unknown) {
+    if (e instanceof UnauthorizedError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("POST /api/piyade/participants failed:", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }

@@ -5,20 +5,16 @@ import { redirect } from "next/navigation";
 import { isAuthedCookie, sessionCookieName } from "@/lib/auth";
 
 /**
- * Sadece bool döndürür (UI için en güvenlisi).
- * AppHeader gibi server component'lerde await edip kullanılır.
+ * Sadece bool döndürür (UI için en güvenlisi)
  */
 export async function isAuthed(): Promise<boolean> {
-  const c = await cookies();
+  const c = await cookies(); // ✅ FIX
   const v = c.get(sessionCookieName)?.value;
   return isAuthedCookie(v);
 }
 
 /**
- * Redirect eden guard (PAGE / Layout / Server Component'lerde kullan).
- * Auth yoksa login'e atar.
- *
- * Not: API route içinde bunu kullanma -> redirect response yerine crash/garip davranır.
+ * Page/Layout guard (redirect eder)
  */
 export async function requireAuthed(nextPath?: string): Promise<void> {
   const ok = await isAuthed();
@@ -29,22 +25,19 @@ export async function requireAuthed(nextPath?: string): Promise<void> {
 }
 
 /**
- * API route'lar için: sadece boolean.
- * GET/POST handler içinde kullan.
+ * API guard için özel hata
  */
-export async function checkAuthed(): Promise<boolean> {
-  return isAuthed();
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("UNAUTHORIZED");
+    this.name = "UNAUTHORIZED";
+  }
 }
 
 /**
- * API route'lar için guard.
- * Auth yoksa 401 döndürmek istediğin senaryolarda kullanılır.
+ * API route guard (redirect YOK)
  */
 export async function requireAuthedApi(): Promise<void> {
   const ok = await isAuthed();
-  if (!ok) {
-    // API içinde redirect istemiyoruz.
-    // Handler bunu yakalayıp 401 dönebilir.
-    throw new Error("UNAUTHORIZED");
-  }
+  if (!ok) throw new UnauthorizedError();
 }
