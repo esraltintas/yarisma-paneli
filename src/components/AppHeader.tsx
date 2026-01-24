@@ -24,7 +24,7 @@ export default async function AppHeader({
   showStages = true,
   showParticipantsLink = false,
   showLogout = false,
-  brandTitle = "Swat Challange Mülakat Paneli",
+  brandTitle = "Anasayfa",
 }: Props) {
   const authed = await isAuthed();
 

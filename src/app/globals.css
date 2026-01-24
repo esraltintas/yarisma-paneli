@@ -12,6 +12,38 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Safari detay oku kaldır */
 summary::-webkit-details-marker {
   display: none;
+}
+
+.ata-bg {
+  position: relative;
+}
+
+.ata-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  background:
+    url("/ata-logo.png") no-repeat,
+    url("/turk_bayragi_logo.png") no-repeat,
+    url("/stage-logo.png") no-repeat;
+
+  /* 🔥 3 LOGO AYNI HİZADA */
+  background-position:
+    calc(50% - 460px) 60%,
+    50% 60%,
+    calc(50% + 460px) 60%;
+
+  /* 🔥 HEPSİ AYNI BOYUT */
+  background-size:
+    clamp(300px, 15vw, 220px),
+    clamp(500px, 15vw, 220px),
+    clamp(300px, 15vw, 220px);
+
+  opacity: 0.08;
 }

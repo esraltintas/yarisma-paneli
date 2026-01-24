@@ -8,15 +8,15 @@ export type Stage = {
 export const STAGES: Stage[] = [
   {
     id: "atis",
-    title: "Piyade Eforlu Atış Parkuru",
+    title: "Eforlu Atış",
     weight: 0.4,
     metric: "time",
   },
   {
     id: "anaerobik",
-    title: "Kuvvette Devamlılık Test",
+    title: "Kuvvette Devamlılık",
     weight: 0.3,
     metric: "time",
   },
-  { id: "kuvvet", title: "Kuvvet Test", weight: 0.3, metric: "time" },
+  { id: "kuvvet", title: "Kuvvet", weight: 0.3, metric: "time" },
 ];

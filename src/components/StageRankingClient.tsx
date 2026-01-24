@@ -207,12 +207,10 @@ const wrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
   overflowX: "auto",
-  background: "white",
 };
 
 const th: React.CSSProperties = {
   padding: 12,
-  background: "#F9FAFB",
   borderBottom: "1px solid #E5E7EB",
   textAlign: "left",
 };

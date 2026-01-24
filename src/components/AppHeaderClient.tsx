@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGES } from "@/lib/stages";
 
-export type Mode = "piyade";
+type Mode = "piyade" | "keskin";
 
 type Props = {
   mode: Mode;
@@ -112,7 +112,6 @@ export default function AppHeaderClient({
 
 const wrap: React.CSSProperties = {
   borderBottom: "1px solid #E5E7EB",
-  background: "white",
 };
 
 const inner: React.CSSProperties = {

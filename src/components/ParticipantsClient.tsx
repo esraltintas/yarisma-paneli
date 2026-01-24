@@ -332,7 +332,8 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 18,
-  background: "white",
+  background: "rgba(255,255,255,0.92)", // ← BURASI
+  backdropFilter: "blur(2px)", // premium cam efekti
 };
 
 const cardHeader: React.CSSProperties = {

@@ -6,5 +6,10 @@ export default async function Page({
   params: Promise<{ stageId: string }>;
 }) {
   const { stageId } = await params;
-  return <StageRankingClient mode="piyade" stageId={stageId} />;
+
+  return (
+    <div className="stage-bg">
+      <StageRankingClient mode="piyade" stageId={stageId} />
+    </div>
+  );
 }

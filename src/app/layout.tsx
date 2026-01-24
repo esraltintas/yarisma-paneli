@@ -13,7 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="tr">
-      <body>
+      <body className="ata-bg">
         <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
           {children}
         </main>

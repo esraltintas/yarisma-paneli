@@ -174,7 +174,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
       "Genel Sıra",
       "Katılımcı",
       ...STAGES.flatMap((s) => [`${s.title} (sn)`, `${s.title} Puan`]),
-      "Genel Toplam",
+      "Toplam Puan",
     ];
 
     const escape = (v: unknown) => {
@@ -269,7 +269,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
                 </th>
               ))}
 
-              <th style={th}>Genel Toplam</th>
+              <th style={th}>Toplam Puan</th>
             </tr>
           </thead>
 
@@ -343,7 +343,6 @@ const wrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
   borderRadius: 12,
-  background: "white",
   color: "#111827",
 };
 
@@ -352,14 +351,12 @@ const table: React.CSSProperties = {
   borderCollapse: "separate",
   borderSpacing: 0,
   minWidth: 980,
-  background: "white",
   color: "#111827",
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
   padding: "12px",
-  background: "#F9FAFB",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
 };
@@ -381,7 +378,6 @@ const tdSticky: React.CSSProperties = {
   ...td,
   position: "sticky",
   left: 0,
-  background: "white",
   zIndex: 1,
   borderRight: "1px solid #E5E7EB",
 };
