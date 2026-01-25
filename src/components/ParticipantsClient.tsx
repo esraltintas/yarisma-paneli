@@ -1,79 +1,94 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { participantsRepo, type Participant } from "@/lib/participantsRepo";
 import { resultsRepo, type StageValue } from "@/lib/resultsRepo";
 import { STAGES } from "@/lib/stages";
 import { formatSecondsToMinSec } from "@/lib/format";
+import Loader from "@/components/Loader";
 
 type Mode = "piyade";
+type Props = { mode: Mode };
 
-type Props = {
-  mode: Mode;
-};
+type ParticipantRow = Participant & { createdAt?: string | Date };
+
+function toTime(v: unknown): number {
+  if (!v) return 0;
+  const d = v instanceof Date ? v : new Date(String(v));
+  const t = d.getTime();
+  return Number.isFinite(t) ? t : 0;
+}
 
 function parseNumberSafe(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
-
-  // TR input: 1,25 -> 1.25
   const normalized = s.replace(",", ".");
   const n = Number(normalized);
-
   if (!Number.isFinite(n)) return null;
   if (n < 0) return 0;
   return n;
 }
 
-function toIsoTime(t: string | Date | undefined): number {
-  if (!t) return 0;
-  const d = typeof t === "string" ? new Date(t) : t;
-  const ms = d.getTime();
-  return Number.isFinite(ms) ? ms : 0;
-}
-
 export default function ParticipantsClient({ mode }: Props) {
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [values, setValues] = useState<StageValue[]>([]);
+  const [participants, setParticipants] = useState<ParticipantRow[] | null>(
+    null,
+  );
+  const [values, setValues] = useState<StageValue[] | null>(null);
   const [nameInput, setNameInput] = useState("");
 
-  // draft state (UI akıcı)
+  // ✅ local draft’lar (input akıcı kalsın)
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
-  const [stageDrafts, setStageDrafts] = useState<Record<string, string>>({});
+  const [valueDrafts, setValueDrafts] = useState<Record<string, string>>({});
 
-  // debounce timers
-  const nameTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const stageTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // ✅ debounce timerlar
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  // load
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const [p, v] = await Promise.all([
+      const [pRaw, v] = await Promise.all([
         participantsRepo.list(mode),
         resultsRepo.list(mode),
       ]);
 
       if (cancelled) return;
+
+      const p = [...(pRaw as ParticipantRow[])].sort(
+        (a, b) => toTime(b.createdAt) - toTime(a.createdAt),
+      );
+
       setParticipants(p);
       setValues(v);
+
+      // draft init
+      const nextNameDrafts: Record<string, string> = {};
+      for (const x of p) nextNameDrafts[x.id] = x.name;
+      setNameDrafts(nextNameDrafts);
+
+      const nextValueDrafts: Record<string, string> = {};
+      for (const sv of v) {
+        const key = `${sv.participantId}:${sv.stageId}`;
+        if (sv.value == null) continue;
+        nextValueDrafts[key] = String(sv.value).replace(".", ",");
+      }
+      setValueDrafts(nextValueDrafts);
     })();
 
     return () => {
       cancelled = true;
+      // timer temizliği
+      for (const k of Object.keys(saveTimers.current)) {
+        clearTimeout(saveTimers.current[k]);
+      }
+      saveTimers.current = {};
     };
   }, [mode]);
 
-  // newest first
-  const orderedParticipants = useMemo(() => {
-    return [...participants].sort(
-      (a, b) => toIsoTime(b.createdAt) - toIsoTime(a.createdAt),
-    );
-  }, [participants]);
-
-  // value map
   const valueMap = useMemo(() => {
     const m = new Map<string, number>();
+    if (!values) return m;
     for (const x of values) {
       if (x.value == null) continue;
       m.set(`${x.participantId}:${x.stageId}`, x.value);
@@ -82,13 +97,35 @@ export default function ParticipantsClient({ mode }: Props) {
   }, [values]);
 
   async function refreshParticipants() {
-    const p = await participantsRepo.list(mode);
+    const pRaw = (await participantsRepo.list(mode)) as ParticipantRow[];
+    const p = [...pRaw].sort(
+      (a, b) => toTime(b.createdAt) - toTime(a.createdAt),
+    );
     setParticipants(p);
+
+    // name draft’ları senkronla (server yeni isim döndürdüyse)
+    setNameDrafts((prev) => {
+      const next = { ...prev };
+      for (const x of p) {
+        if (next[x.id] == null) next[x.id] = x.name;
+      }
+      return next;
+    });
   }
 
   async function refreshValues() {
     const v = await resultsRepo.list(mode);
     setValues(v);
+
+    setValueDrafts((prev) => {
+      const next = { ...prev };
+      for (const sv of v) {
+        const key = `${sv.participantId}:${sv.stageId}`;
+        if (sv.value == null) continue;
+        next[key] = String(sv.value).replace(".", ",");
+      }
+      return next;
+    });
   }
 
   async function onAddParticipant() {
@@ -103,55 +140,28 @@ export default function ParticipantsClient({ mode }: Props) {
   async function onDeleteParticipant(id: string) {
     await participantsRepo.remove(mode, id);
     await resultsRepo.removeParticipant(mode, id);
-
-    // draft temizle
-    setNameDrafts((prev) => {
-      const n = { ...prev };
-      delete n[id];
-      return n;
-    });
-
-    setStageDrafts((prev) => {
-      const n = { ...prev };
-      for (const k of Object.keys(n)) {
-        if (k.startsWith(`${id}:`)) delete n[k];
-      }
-      return n;
-    });
-
     await Promise.all([refreshParticipants(), refreshValues()]);
   }
 
-  function onChangeNameLocal(id: string, nextName: string) {
-    // UI anlık
-    setNameDrafts((prev) => ({ ...prev, [id]: nextName }));
-
-    // debounce server write
-    const t = nameTimers.current[id];
+  function queue(fnKey: string, fn: () => Promise<void>, ms = 450) {
+    const t = saveTimers.current[fnKey];
     if (t) clearTimeout(t);
+    saveTimers.current[fnKey] = setTimeout(() => {
+      void fn();
+      delete saveTimers.current[fnKey];
+    }, ms);
+  }
 
-    nameTimers.current[id] = setTimeout(async () => {
-      const name = nextName.trim();
+  function onChangeNameLocal(id: string, nextName: string) {
+    setNameDrafts((m) => ({ ...m, [id]: nextName }));
 
-      try {
-        // boş stringe izin verme (istersen burada allow edebilirsin)
-        if (!name) return;
-
-        await participantsRepo.updateName(mode, id, name);
-        await refreshParticipants();
-
-        // draft’i temizle (server senkron)
-        setNameDrafts((prev) => {
-          const n = { ...prev };
-          delete n[id];
-          return n;
-        });
-      } catch (e) {
-        console.error("participants updateName failed:", e);
-      } finally {
-        delete nameTimers.current[id];
-      }
-    }, 600);
+    // ✅ debounce PATCH
+    queue(`name:${id}`, async () => {
+      const trimmed = nextName.trim();
+      if (!trimmed) return;
+      await participantsRepo.updateName(mode, id, trimmed);
+      await refreshParticipants();
+    });
   }
 
   function onChangeStageValueLocal(
@@ -160,35 +170,21 @@ export default function ParticipantsClient({ mode }: Props) {
     raw: string,
   ) {
     const key = `${participantId}:${stageId}`;
+    setValueDrafts((m) => ({ ...m, [key]: raw }));
 
-    // UI anlık
-    setStageDrafts((prev) => ({ ...prev, [key]: raw }));
-
-    // debounce server write
-    const t = stageTimers.current[key];
-    if (t) clearTimeout(t);
-
-    stageTimers.current[key] = setTimeout(async () => {
-      try {
-        const v = parseNumberSafe(raw); // null / 0 / positive
+    queue(
+      `val:${key}`,
+      async () => {
+        const v = parseNumberSafe(raw);
         await resultsRepo.setValue(mode, participantId, stageId, v);
-
-        // server state'i çek (istersen daha seyrek yaparız)
         await refreshValues();
-
-        // draft temizle (server’dan gelen değere bırak)
-        setStageDrafts((prev) => {
-          const n = { ...prev };
-          delete n[key];
-          return n;
-        });
-      } catch (e) {
-        console.error("results setValue failed:", e);
-      } finally {
-        delete stageTimers.current[key];
-      }
-    }, 500);
+      },
+      350,
+    );
   }
+
+  // loader
+  if (!participants || !values) return <Loader />;
 
   return (
     <div style={{ maxWidth: 1200, margin: "18px auto", padding: "0 18px" }}>
@@ -205,7 +201,7 @@ export default function ParticipantsClient({ mode }: Props) {
         </button>
       </div>
 
-      {orderedParticipants.length === 0 ? (
+      {participants.length === 0 ? (
         <div style={{ marginTop: 20, color: "#6B7280" }}>
           Henüz katılımcı yok.
         </div>
@@ -218,83 +214,74 @@ export default function ParticipantsClient({ mode }: Props) {
             marginTop: 18,
           }}
         >
-          {orderedParticipants.map((p) => {
-            const shownName = nameDrafts[p.id] ?? p.name;
+          {participants.map((p) => (
+            <div key={p.id} style={card}>
+              {/* header */}
+              <div style={cardHeader}>
+                <input
+                  value={nameDrafts[p.id] ?? p.name}
+                  onChange={(e) => onChangeNameLocal(p.id, e.target.value)}
+                  style={nameBox}
+                />
 
-            return (
-              <div key={p.id} style={card}>
-                {/* header */}
-                <div style={cardHeader}>
-                  <input
-                    value={shownName}
-                    onChange={(e) => onChangeNameLocal(p.id, e.target.value)}
-                    style={nameBox}
-                  />
+                <button
+                  onClick={() => onDeleteParticipant(p.id)}
+                  style={deleteBtn}
+                >
+                  Sil
+                </button>
+              </div>
 
-                  <button
-                    onClick={() => onDeleteParticipant(p.id)}
-                    style={deleteBtn}
-                  >
-                    Sil
-                  </button>
-                </div>
+              {/* stages */}
+              <div style={{ display: "grid", gap: 14 }}>
+                {STAGES.map((s) => {
+                  const key = `${p.id}:${s.id}`;
+                  const current = valueMap.get(key) ?? null;
 
-                {/* stages */}
-                <div style={{ display: "grid", gap: 14 }}>
-                  {STAGES.map((s) => {
-                    const key = `${p.id}:${s.id}`;
-                    const current = valueMap.get(key) ?? null;
-
-                    const shownRaw =
-                      stageDrafts[key] ??
-                      (current == null
+                  const draft = valueDrafts[key];
+                  const inputValue =
+                    draft != null
+                      ? draft
+                      : current == null
                         ? ""
-                        : String(current).replace(".", ","));
+                        : String(current).replace(".", ",");
 
-                    // preview hesap (draft varsa draft'tan, yoksa current'tan)
-                    const previewNumber =
-                      stageDrafts[key] != null
-                        ? parseNumberSafe(stageDrafts[key])
-                        : current;
+                  const currentForPreview =
+                    draft != null ? parseNumberSafe(draft) : current;
 
-                    return (
-                      <div key={s.id} style={stageRow}>
-                        <div style={stageLeft}>
-                          <div style={stageTitle}>
-                            {s.title}{" "}
-                            <span style={weightText}>
-                              %{Math.round(s.weight * 100)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div style={stageRight}>
-                          <input
-                            inputMode="decimal"
-                            placeholder="sn"
-                            value={shownRaw}
-                            onChange={(e) =>
-                              onChangeStageValueLocal(
-                                p.id,
-                                s.id,
-                                e.target.value,
-                              )
-                            }
-                            style={stageInput}
-                          />
-                          <span style={minutePreview}>
-                            {previewNumber == null
-                              ? "-"
-                              : formatSecondsToMinSec(previewNumber)}
+                  return (
+                    <div key={s.id} style={stageRow}>
+                      <div style={stageLeft}>
+                        <div style={stageTitle}>
+                          {s.title}{" "}
+                          <span style={weightText}>
+                            %{Math.round(s.weight * 100)}
                           </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <div style={stageRight}>
+                        <input
+                          inputMode="decimal"
+                          placeholder="sn"
+                          value={inputValue}
+                          onChange={(e) =>
+                            onChangeStageValueLocal(p.id, s.id, e.target.value)
+                          }
+                          style={stageInput}
+                        />
+                        <span style={minutePreview}>
+                          {currentForPreview == null
+                            ? "-"
+                            : formatSecondsToMinSec(currentForPreview)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -332,8 +319,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 18,
-  background: "rgba(255,255,255,0.92)", // ← BURASI
-  backdropFilter: "blur(2px)", // premium cam efekti
+  background: "white",
 };
 
 const cardHeader: React.CSSProperties = {
@@ -344,7 +330,7 @@ const cardHeader: React.CSSProperties = {
 };
 
 const nameBox: React.CSSProperties = {
-  width: 360,
+  width: 340,
   padding: "12px 14px",
   borderRadius: 14,
   border: "1px solid #E5E7EB",

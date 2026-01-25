@@ -47,3 +47,9 @@ summary::-webkit-details-marker {
 
   opacity: 0.08;
 }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

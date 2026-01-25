@@ -7,6 +7,7 @@ import { stagePointsByRank } from "@/lib/scoring";
 import { formatTime } from "@/lib/format";
 import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 import { maskName } from "@/lib/maskName";
+import Loader from "@/components/Loader";
 
 type StageCell = {
   value: number | null; // time (sn)
@@ -20,19 +21,27 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
+  const [loading, setLoading] = useState(true); // ✅
 
   // ✅ 1 kere yükle (mode değişince tekrar)
   useEffect(() => {
     let cancelled = false;
+    setLoading(true); // ✅ mode değişince tekrar loading
+
     (async () => {
-      const [p, v] = await Promise.all([
-        participantsRepo.list(mode),
-        resultsRepo.list(mode),
-      ]);
-      if (cancelled) return;
-      setParticipants(p);
-      setValues(v);
+      try {
+        const [p, v] = await Promise.all([
+          participantsRepo.list(mode),
+          resultsRepo.list(mode),
+        ]);
+        if (cancelled) return;
+        setParticipants(p);
+        setValues(v);
+      } finally {
+        if (!cancelled) setLoading(false); // ✅
+      }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -200,13 +209,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
         const v = cell?.value ?? null;
         const pts = cell?.points ?? "";
-
-        const valueOut =
-          v == null
-            ? ""
-            : stage.metric === "time"
-              ? String(v).replace(".", ",")
-              : String(v);
+        const valueOut = v == null ? "" : String(v).replace(".", ",");
         cells.push(valueOut, pts);
       }
 
@@ -229,6 +232,12 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     URL.revokeObjectURL(url);
   }
 
+  // ✅ 1) Önce loader
+  if (loading) {
+    return <Loader />;
+  }
+
+  // ✅ 2) Loading bittiyse, gerçekten boşsa “Henüz katılımcı yok”
   if (participants.length === 0) {
     return (
       <div style={{ color: "#6B7280" }}>
