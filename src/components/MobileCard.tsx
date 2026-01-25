@@ -120,7 +120,7 @@ export default function MobileCard({
 
       {open ? <div>{children}</div> : null}
 
-      {footer ? (
+      {footer && open ? (
         <footer
           style={{
             marginTop: 12,

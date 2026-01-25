@@ -99,3 +99,43 @@ summary::-webkit-details-marker {
     display: block !important;
   }
 }
+
+/* Mobilde input + buton yan yana kalsın */
+.add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .add-row input {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Katılımcı satırı: isim esner, aksiyonlar sabit */
+.p-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  /* isim | Sil | ok */
+  gap: 10px;
+  align-items: center;
+}
+
+.p-name {
+  min-width: 0;
+  /* 🔥 en kritik satır */
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* taşanı ... yap */
+  white-space: nowrap;
+  /* tek satır */
+}
+
+.p-del, .p-toggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
