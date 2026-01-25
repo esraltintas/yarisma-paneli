@@ -48,6 +48,22 @@ summary::-webkit-details-marker {
   opacity: 0.08;
 }
 
+@media (max-width: 768px) {
+  .ata-bg::before {
+    /* 3 logo dikey sıraya geçiyor */
+    background:
+      url("/ata-logo.png") no-repeat center 28%,
+      url("/turk_bayragi_logo.png") no-repeat center 50%,
+      url("/stage-logo.png") no-repeat center 72%;
+
+    /* mobilde daha dengeli boyutlar */
+    background-size:
+      clamp(160px, 40vw, 220px),
+      clamp(170px, 44vw, 240px),
+      clamp(160px, 40vw, 220px);
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
