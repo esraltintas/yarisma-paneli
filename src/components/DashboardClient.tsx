@@ -8,6 +8,7 @@ import { formatTime } from "@/lib/format";
 import { getStagesByMode, type Mode } from "@/lib/getStagesByMode";
 import { maskName } from "@/lib/maskName";
 import Loader from "@/components/Loader";
+import MobileCard from "@/components/MobileCard";
 
 type StageCell = {
   value: number | null; // time (sn)
@@ -16,17 +17,31 @@ type StageCell = {
   weighted: number | null;
 };
 
+function useIsCompact(breakpointPx = 1024) {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const m = window.matchMedia(`(max-width: ${breakpointPx - 1}px)`);
+    const onChange = () => setCompact(m.matches);
+    onChange();
+    m.addEventListener?.("change", onChange);
+    return () => m.removeEventListener?.("change", onChange);
+  }, [breakpointPx]);
+
+  return compact;
+}
+
 export default function DashboardClient({ mode }: { mode: Mode }) {
   const STAGES = getStagesByMode(mode);
+  const isCompact = useIsCompact(1024); // mobil + tablet
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [values, setValues] = useState<StageValue[]>([]);
-  const [loading, setLoading] = useState(true); // ✅
+  const [loading, setLoading] = useState(true);
 
-  // ✅ 1 kere yükle (mode değişince tekrar)
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); // ✅ mode değişince tekrar loading
+    setLoading(true);
 
     (async () => {
       try {
@@ -38,7 +53,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         setParticipants(p);
         setValues(v);
       } finally {
-        if (!cancelled) setLoading(false); // ✅
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -47,7 +62,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     };
   }, [mode]);
 
-  // quick lookup: pid:stageId -> value
   const valueMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const x of values) {
@@ -57,7 +71,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     return m;
   }, [values]);
 
-  // etap bazlı rank/puan hesapla (tie + rank atlama)
   const stageRankMaps = useMemo(() => {
     const maps: Record<
       string,
@@ -75,7 +88,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         value: number;
       }[];
 
-      // time: küçük daha iyi, deterministic tie-break
       present.sort((a, b) => {
         const c = a.value - b.value;
         if (c !== 0) return c;
@@ -102,7 +114,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
           pointsByPid.set(pid, pts);
         }
 
-        currentRank += groupSize; // ✅ rank atlama
+        currentRank += groupSize;
         i = j;
       }
 
@@ -112,11 +124,9 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     return maps;
   }, [participants, valueMap, STAGES]);
 
-  // cellMap + overallRows
   const { cellMap, overallRows } = useMemo(() => {
     const cellMap = new Map<string, StageCell>();
 
-    // default boş hücreler
     for (const p of participants) {
       for (const s of STAGES) {
         const v = valueMap.get(`${p.id}:${s.id}`) ?? null;
@@ -129,7 +139,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
       }
     }
 
-    // doldur
     for (const s of STAGES) {
       const { rankByPid, pointsByPid } = stageRankMaps[s.id] ?? {
         rankByPid: new Map<string, number>(),
@@ -144,16 +153,10 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         const points = pointsByPid.get(p.id) ?? null;
         const weighted = points == null ? null : points * s.weight;
 
-        cellMap.set(key, {
-          ...base,
-          rank,
-          points,
-          weighted,
-        });
+        cellMap.set(key, { ...base, rank, points, weighted });
       }
     }
 
-    // overall: tie-break alfabetik, rank paylaşımı yok (1..N)
     const overall = participants
       .map((p) => {
         let total = 0;
@@ -178,7 +181,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
 
   function exportCsv() {
     const sep = ";";
-
     const headers = [
       "Genel Sıra",
       "Katılımcı",
@@ -223,21 +225,15 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `swat-${mode}-dashboard-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
+    a.download = `swat-${mode}-dashboard-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
   }
 
-  // ✅ 1) Önce loader
-  if (loading) {
-    return <Loader />;
-  }
+  if (loading) return <Loader />;
 
-  // ✅ 2) Loading bittiyse, gerçekten boşsa “Henüz katılımcı yok”
   if (participants.length === 0) {
     return (
       <div style={{ color: "#6B7280" }}>
@@ -246,9 +242,113 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     );
   }
 
+  // ✅ Mobil/Tablet: tablo yok, card listesi var (kaydırma yok)
+  if (isCompact) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={exportCsv} style={exportBtn}>
+            Excel’e Aktar (CSV)
+          </button>
+        </div>
+
+        {overallRows.map((row) => {
+          const totalOut = Number(row.total.toFixed(2));
+
+          return (
+            <MobileCard
+              key={row.participant.id}
+              collapsible
+              defaultOpen={false}
+              title={
+                <span>
+                  {row.rank}. {maskName(row.participant.name)}
+                </span>
+              }
+              right={<span style={{ fontWeight: 900 }}>{totalOut}</span>}
+            >
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                {STAGES.map((stage) => {
+                  const cell = cellMap.get(`${row.participant.id}:${stage.id}`);
+                  const v = cell?.value ?? null;
+                  const pts = cell?.points ?? null;
+                  const rank = cell?.rank ?? null;
+
+                  const left = (
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        color: "#111827",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {stage.title}
+                      <span
+                        style={{
+                          marginLeft: 8,
+                          color: "#6B7280",
+                          fontWeight: 800,
+                          fontSize: 12,
+                        }}
+                      >
+                        %{formatWeight(stage.weight)}
+                      </span>
+                    </div>
+                  );
+
+                  const right = (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 10 }}
+                    >
+                      <span style={{ fontWeight: 900 }}>
+                        {v == null ? "-" : formatTime(v)}
+                      </span>
+                      {pts != null ? (
+                        <span style={pill}>+{pts}</span>
+                      ) : (
+                        <span style={missing}>—</span>
+                      )}
+                    </div>
+                  );
+
+                  const hint =
+                    pts == null
+                      ? "Bu etap için değer girilmemiş."
+                      : `Sıra: ${rank} • Etap puanı: ${pts}`;
+
+                  return (
+                    <div
+                      key={stage.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        alignItems: "center",
+                        padding: "10px 12px",
+                        border: "1px solid #F3F4F6",
+                        borderRadius: 12,
+                        background: "white",
+                      }}
+                      title={hint}
+                    >
+                      <div style={{ minWidth: 0 }}>{left}</div>
+                      <div style={{ flexShrink: 0 }}>{right}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </MobileCard>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ✅ Web/Desktop: mevcut tablo
   return (
     <div>
-      {/* üst bar: sağda export */}
       <div
         style={{
           display: "flex",
@@ -313,7 +413,6 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
                         }}
                       >
                         <span>{v == null ? "-" : formatTime(v)}</span>
-
                         {pts != null ? (
                           <span style={pill}>+{pts}</span>
                         ) : (
