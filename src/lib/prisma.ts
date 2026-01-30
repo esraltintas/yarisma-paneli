@@ -12,13 +12,16 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set");
 }
 
-// Next dev'de hot-reload yüzünden yeni connection açmasın diye global cache
 const pool =
   globalForPrisma.pgPool ??
   new Pool({
     connectionString,
-    // Supabase genelde SSL ister; pooler ile çoğu durumda bu lazım:
     ssl: { rejectUnauthorized: false },
+
+    max: 1,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    allowExitOnIdle: true,
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.pgPool = pool;
