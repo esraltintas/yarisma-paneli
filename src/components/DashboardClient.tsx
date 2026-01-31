@@ -167,7 +167,26 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         return { participant: p, total };
       })
       .sort((a, b) => {
+        // 1) toplam puan büyük olan önde
         if (b.total !== a.total) return b.total - a.total;
+
+        // 2) eşitse: eforlu atış (id: "atis") süresi küçük olan önde
+        const aAtis = valueMap.get(`${a.participant.id}:atis`) ?? null;
+        const bAtis = valueMap.get(`${b.participant.id}:atis`) ?? null;
+
+        const aHas = aAtis != null;
+        const bHas = bAtis != null;
+
+        // ikisinin de süresi varsa: süreye göre
+        if (aHas && bHas) {
+          if (aAtis !== bAtis) return aAtis - bAtis;
+        }
+
+        // sadece biri yaptıysa: yapan öne
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+
+        // 3) ikisi de atış yapmadıysa: alfabetik
         return a.participant.name.localeCompare(b.participant.name, "tr");
       })
       .map((r, idx) => ({
