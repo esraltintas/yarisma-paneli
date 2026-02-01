@@ -164,7 +164,6 @@ export default function StageRankingClient({
                 justifyContent: "space-between",
                 padding: "14px 16px",
                 borderBottom: "1px solid #F3F4F6",
-                background: "white",
               }}
             >
               <div style={{ fontWeight: 900 }}>
