@@ -10,6 +10,20 @@ import Loader from "@/components/Loader";
 
 type ParticipantRow = Participant & { createdAt?: string | Date };
 
+function useIsCompact(breakpointPx = 480) {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const m = window.matchMedia(`(max-width: ${breakpointPx}px)`);
+    const onChange = () => setCompact(m.matches);
+    onChange();
+    m.addEventListener?.("change", onChange);
+    return () => m.removeEventListener?.("change", onChange);
+  }, [breakpointPx]);
+
+  return compact;
+}
+
 export default function StageRankingClient({
   mode,
   stageId,
@@ -19,6 +33,7 @@ export default function StageRankingClient({
 }) {
   const STAGES = getStagesByMode(mode);
   const stage = STAGES.find((s) => s.id === stageId);
+  const isCompact = useIsCompact(480);
 
   const [participants, setParticipants] = useState<ParticipantRow[] | null>(
     null,
@@ -99,7 +114,6 @@ export default function StageRankingClient({
     lines.push(headers.map(escape).join(sep));
 
     for (const r of rows) {
-      // export’ta maskeli değil, gerçek isim (dashboard’daki gibi)
       const valueOut = String(r.value).replace(".", ",");
       lines.push([r.rank, r.participant.name, valueOut].map(escape).join(sep));
     }
@@ -133,13 +147,34 @@ export default function StageRankingClient({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 14,
+          gap: isCompact ? 8 : 12,
+          marginBottom: isCompact ? 10 : 14,
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ fontWeight: 900, fontSize: 22 }}>{stage.title}</div>
+        <div
+          style={{
+            fontWeight: 900,
+            fontSize: isCompact ? 18 : 22,
+            lineHeight: 1.15,
+            minWidth: 0,
+            wordBreak: "break-word",
+          }}
+        >
+          {stage.title}
+        </div>
 
-        <button onClick={exportCsv} style={exportBtn}>
+        <button
+          onClick={exportCsv}
+          style={{
+            ...exportBtn,
+            padding: isCompact ? "8px 10px" : exportBtn.padding,
+            fontSize: isCompact ? 12 : 14,
+            lineHeight: 1.1,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
           Excel’e Aktar (CSV)
         </button>
       </div>
@@ -162,14 +197,21 @@ export default function StageRankingClient({
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                padding: "14px 16px",
+                padding: isCompact ? "12px 12px" : "14px 16px",
                 borderBottom: "1px solid #F3F4F6",
+                gap: 10,
               }}
             >
-              <div style={{ fontWeight: 900 }}>
+              <div style={{ fontWeight: 900, minWidth: 0 }}>
                 {r.rank}. {maskName(r.participant.name)}
               </div>
-              <div style={{ fontWeight: 900, color: "#111827" }}>
+              <div
+                style={{
+                  fontWeight: 900,
+                  color: "#111827",
+                  flexShrink: 0,
+                }}
+              >
                 {formatTime(r.value)}
               </div>
             </div>
