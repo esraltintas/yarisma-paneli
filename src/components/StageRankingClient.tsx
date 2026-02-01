@@ -76,6 +76,49 @@ export default function StageRankingClient({
     }));
   }, [participants, values, stageId, stage]);
 
+  function exportCsv() {
+    if (!stage) return;
+
+    const sep = ";";
+    const headers = ["Sıra", "Katılımcı", `${stage.title} (sn)`];
+
+    const escape = (v: unknown) => {
+      const s = String(v ?? "");
+      if (
+        s.includes('"') ||
+        s.includes("\n") ||
+        s.includes("\r") ||
+        s.includes(sep)
+      ) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const lines: string[] = [];
+    lines.push(headers.map(escape).join(sep));
+
+    for (const r of rows) {
+      // export’ta maskeli değil, gerçek isim (dashboard’daki gibi)
+      const valueOut = String(r.value).replace(".", ",");
+      lines.push([r.rank, r.participant.name, valueOut].map(escape).join(sep));
+    }
+
+    const csv = "\uFEFF" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `swat-${mode}-${stage.id}-ranking-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   if (!participants || !values) return <Loader />;
 
   if (!stage) {
@@ -84,8 +127,21 @@ export default function StageRankingClient({
 
   return (
     <div>
-      <div style={{ fontWeight: 900, fontSize: 22, marginBottom: 14 }}>
-        {stage.title}
+      {/* Header + Export */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ fontWeight: 900, fontSize: 22 }}>{stage.title}</div>
+
+        <button onClick={exportCsv} style={exportBtn}>
+          Excel’e Aktar (CSV)
+        </button>
       </div>
 
       {rows.length === 0 ? (
@@ -124,3 +180,14 @@ export default function StageRankingClient({
     </div>
   );
 }
+
+/* --- styles --- */
+const exportBtn: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 12,
+  border: "1px solid #111827",
+  background: "#111827",
+  color: "white",
+  fontWeight: 900,
+  cursor: "pointer",
+};
