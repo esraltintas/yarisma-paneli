@@ -161,7 +161,12 @@ const dropdown: React.CSSProperties = {
   position: "absolute",
   top: "calc(100% + 10px)",
   right: 0,
-  width: 360,
+
+  // ✅ mobilde kesilmeyi engelle
+  width: "max-content",
+  minWidth: 240,
+  maxWidth: "calc(100vw - 24px)",
+
   borderRadius: 14,
   border: "1px solid #E5E7EB",
   background: "white",
