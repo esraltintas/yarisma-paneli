@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,6 +18,13 @@ export default function RootLayout({
         <main style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
           {children}
         </main>
+
+        {/* 📊 Umami Analytics */}
+        <Script
+          src="https://cloud.umami.is/script.js"
+          data-website-id="a4de69d2-e66d-43df-b098-69587d3db965"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
