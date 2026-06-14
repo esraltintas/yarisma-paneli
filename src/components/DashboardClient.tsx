@@ -89,8 +89,18 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
       }[];
 
       present.sort((a, b) => {
-        const c = a.value - b.value;
+        let c: number;
+
+        if (stage.id === "anaerobik") {
+          // Cooper: büyük değer daha iyi
+          c = b.value - a.value;
+        } else {
+          // Süre etapları: küçük değer daha iyi
+          c = a.value - b.value;
+        }
+
         if (c !== 0) return c;
+
         return a.participantId.localeCompare(b.participantId);
       });
 
@@ -106,7 +116,15 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         while (j < present.length && present[j].value === baseVal) j++;
 
         const groupSize = j - i;
-        const pts = stagePointsByRank(currentRank);
+        let pts = stagePointsByRank(currentRank);
+
+        if (
+          (stage.id === "atis" && baseVal > 180) ||
+          (stage.id === "kuvvet" && baseVal > 300) ||
+          (stage.id === "anaerobik" && baseVal <= 2800)
+        ) {
+          pts = 0;
+        }
 
         for (let k = i; k < j; k++) {
           const pid = present[k].participantId;
@@ -203,7 +221,10 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
     const headers = [
       "Genel Sıra",
       "Katılımcı",
-      ...STAGES.flatMap((s) => [`${s.title} (sn)`, `${s.title} Puan`]),
+      ...STAGES.flatMap((s) => [
+        s.id === "anaerobik" ? `${s.title} (m)` : `${s.title} (sn)`,
+        `${s.title} Puan`,
+      ]),
       "Toplam Puan",
     ];
 
@@ -322,7 +343,11 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
                       style={{ display: "flex", alignItems: "center", gap: 10 }}
                     >
                       <span style={{ fontWeight: 900 }}>
-                        {v == null ? "-" : formatTime(v)}
+                        {v == null
+                          ? "-"
+                          : stage.id === "anaerobik"
+                            ? `${v} m`
+                            : formatTime(v)}
                       </span>
                       {pts != null ? (
                         <span style={pill}>+{pts}</span>
@@ -431,7 +456,13 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
                           gap: 8,
                         }}
                       >
-                        <span>{v == null ? "-" : formatTime(v)}</span>
+                        <span>
+                          {v == null
+                            ? "-"
+                            : stage.id === "anaerobik"
+                              ? `${v} m`
+                              : formatTime(v)}
+                        </span>
                         {pts != null ? (
                           <span style={pill}>+{pts}</span>
                         ) : (

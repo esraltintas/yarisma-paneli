@@ -79,7 +79,11 @@ export default function StageRankingClient({
     }[];
 
     present.sort((a, b) => {
-      const c = a.value - b.value;
+      const c =
+        stage.id === "anaerobik"
+          ? b.value - a.value // Cooper: yüksek metre daha iyi
+          : a.value - b.value; // Süre etapları: düşük süre daha iyi
+
       if (c !== 0) return c;
       return a.participant.id.localeCompare(b.participant.id);
     });
@@ -95,8 +99,11 @@ export default function StageRankingClient({
     if (!stage) return;
 
     const sep = ";";
-    const headers = ["Sıra", "Katılımcı", `${stage.title} (sn)`];
-
+    const headers = [
+      "Sıra",
+      "Katılımcı",
+      stage.id === "anaerobik" ? `${stage.title} (m)` : `${stage.title} (sn)`,
+    ];
     const escape = (v: unknown) => {
       const s = String(v ?? "");
       if (
@@ -212,7 +219,9 @@ export default function StageRankingClient({
                   flexShrink: 0,
                 }}
               >
-                {formatTime(r.value)}
+                {stage.id === "anaerobik"
+                  ? `${r.value} m`
+                  : formatTime(r.value)}
               </div>
             </div>
           ))}

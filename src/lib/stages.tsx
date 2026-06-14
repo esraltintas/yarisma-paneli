@@ -14,9 +14,9 @@ export const STAGES: Stage[] = [
   },
   {
     id: "anaerobik",
-    title: "Kuvvette Devamlılık",
+    title: "Cooper Testi",
     weight: 0.3,
     metric: "time",
   },
-  { id: "kuvvet", title: "Kuvvet", weight: 0.3, metric: "time" },
+  { id: "kuvvet", title: "Relatif Kuvvet", weight: 0.3, metric: "time" },
 ];

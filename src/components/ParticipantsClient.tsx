@@ -27,14 +27,10 @@ export default function ParticipantsClient({ mode }: Props) {
   const [values, setValues] = useState<StageValue[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // add input
   const [nameInput, setNameInput] = useState("");
-
-  // local drafts (beklemeden yaz)
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [valueDrafts, setValueDrafts] = useState<Record<string, string>>({});
 
-  // debounce timers
   const nameTimers = useRef<Record<string, number>>({});
   const valueTimers = useRef<Record<string, number>>({});
 
@@ -44,7 +40,6 @@ export default function ParticipantsClient({ mode }: Props) {
       resultsRepo.list(mode),
     ]);
 
-    // ✅ en son eklenen üstte
     const sorted = [...p].sort((a, b) => {
       const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -54,7 +49,6 @@ export default function ParticipantsClient({ mode }: Props) {
     setParticipants(sorted);
     setValues(v);
 
-    // drafts senk (name)
     setNameDrafts((prev) => {
       const next: Record<string, string> = { ...prev };
       for (const pp of sorted) {
@@ -66,7 +60,6 @@ export default function ParticipantsClient({ mode }: Props) {
       return next;
     });
 
-    // drafts senk (values)
     setValueDrafts((prev) => {
       const next: Record<string, string> = { ...prev };
 
@@ -77,7 +70,6 @@ export default function ParticipantsClient({ mode }: Props) {
         }
       }
 
-      // prune removed participants
       const alivePids = new Set(sorted.map((pp) => pp.id));
       for (const k of Object.keys(next)) {
         const [pid] = k.split(":");
@@ -104,7 +96,6 @@ export default function ParticipantsClient({ mode }: Props) {
     return () => {
       cancelled = true;
 
-      // timers cleanup
       for (const id of Object.keys(nameTimers.current)) {
         window.clearTimeout(nameTimers.current[id]);
       }
@@ -117,7 +108,6 @@ export default function ParticipantsClient({ mode }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // quick lookup current value
   const valueMap = useMemo(() => {
     const m = new Map<string, number | null>();
     for (const x of values)
@@ -162,7 +152,6 @@ export default function ParticipantsClient({ mode }: Props) {
 
       await resultsRepo.setValue(mode, pid, stageId, parsed.value);
 
-      // ✅ hafif güncelleme: sadece values yenile
       const fresh = await resultsRepo.list(mode);
       setValues(fresh);
     }, 450);
@@ -172,7 +161,6 @@ export default function ParticipantsClient({ mode }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* ✅ Input + Ekle yan yana (mobilde de) */}
       <div style={addRow}>
         <input
           value={nameInput}
@@ -186,7 +174,6 @@ export default function ParticipantsClient({ mode }: Props) {
         </button>
       </div>
 
-      {/* List */}
       {participants.length === 0 ? (
         <div style={{ color: "#6B7280", fontWeight: 700 }}>
           Henüz katılımcı yok.
@@ -211,7 +198,6 @@ export default function ParticipantsClient({ mode }: Props) {
                     />
                   </div>
                 }
-                /* ✅ Sil sadece accordion içinde (footer) */
                 footer={
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
@@ -224,7 +210,6 @@ export default function ParticipantsClient({ mode }: Props) {
                   </div>
                 }
               >
-                {/* Stage inputs */}
                 <div
                   style={{ display: "flex", flexDirection: "column", gap: 10 }}
                 >
@@ -236,9 +221,10 @@ export default function ParticipantsClient({ mode }: Props) {
                         ? ""
                         : String(valueMap.get(key)!).replace(".", ","));
 
+                    const unit = s.id === "anaerobik" ? "m" : "sn";
+
                     return (
                       <div key={s.id} style={stageCard}>
-                        {/* ✅ Başlık + % sağda */}
                         <div style={stageTopRow}>
                           <div style={stageTitle}>{s.title}</div>
                           <div style={stageWeight}>
@@ -246,7 +232,6 @@ export default function ParticipantsClient({ mode }: Props) {
                           </div>
                         </div>
 
-                        {/* ✅ input + "sn" input içinde */}
                         <div style={stageInputWrap}>
                           <input
                             inputMode="decimal"
@@ -254,10 +239,10 @@ export default function ParticipantsClient({ mode }: Props) {
                             onChange={(e) =>
                               setStageDraft(p.id, s.id, e.target.value)
                             }
-                            placeholder="sn"
+                            placeholder={unit}
                             style={stageInput}
                           />
-                          <span style={stageSuffix}>sn</span>
+                          <span style={stageSuffix}>{unit}</span>
                         </div>
                       </div>
                     );
