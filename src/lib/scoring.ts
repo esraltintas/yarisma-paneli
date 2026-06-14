@@ -1,17 +1,106 @@
-export function stagePointsByRank(rank: number) {
-  if (rank <= 3) return 100;
-  if (rank <= 7) return 95;
-  if (rank <= 12) return 90;
-  if (rank <= 20) return 85;
-  if (rank <= 30) return 80;
-  if (rank <= 40) return 75;
-  if (rank <= 50) return 70;
-  if (rank <= 60) return 65;
-  if (rank <= 70) return 60;
-  if (rank <= 80) return 55;
-  if (rank <= 88) return 50;
-  if (rank <= 94) return 45;
-  if (rank <= 97) return 35;
-  if (rank <= 99) return 20;
-  return 0; // 100.
+export function stagePointsByRank(rank: number): number {
+  switch (rank) {
+    case 1:
+      return 100;
+    case 2:
+      return 98;
+    case 3:
+      return 96;
+    case 4:
+      return 94;
+    case 5:
+      return 92;
+    case 6:
+      return 90;
+    case 7:
+      return 89;
+    case 8:
+      return 88;
+    case 9:
+      return 87;
+    case 10:
+      return 86;
+    case 11:
+      return 85;
+    case 12:
+      return 84;
+    case 13:
+      return 83;
+    case 14:
+      return 82;
+    case 15:
+      return 81;
+    case 16:
+      return 80;
+    case 17:
+      return 79;
+    case 18:
+      return 78;
+    case 19:
+      return 77;
+    case 20:
+      return 76;
+    case 21:
+      return 75;
+    case 22:
+      return 74;
+    case 23:
+      return 73;
+    case 24:
+      return 72;
+    case 25:
+      return 71;
+    case 26:
+      return 70;
+    case 27:
+      return 69;
+    case 28:
+      return 68;
+    case 29:
+      return 67;
+    case 30:
+      return 66;
+    case 31:
+      return 65;
+    case 32:
+      return 64;
+    case 33:
+      return 63;
+    case 34:
+      return 62;
+    case 35:
+      return 61;
+    case 36:
+      return 60;
+    case 37:
+      return 58;
+    case 38:
+      return 56;
+    case 39:
+      return 54;
+    case 40:
+      return 52;
+    case 41:
+      return 50;
+    case 42:
+      return 45;
+    case 43:
+      return 40;
+    case 44:
+      return 30;
+    case 45:
+      return 20;
+    case 46:
+      return 10;
+    case 47:
+      return 8;
+    case 48:
+      return 6;
+    case 49:
+      return 4;
+    case 50:
+      return 0;
+    default:
+      return 0;
+  }
 }

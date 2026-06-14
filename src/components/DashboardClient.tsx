@@ -121,7 +121,7 @@ export default function DashboardClient({ mode }: { mode: Mode }) {
         if (
           (stage.id === "atis" && baseVal > 180) ||
           (stage.id === "kuvvet" && baseVal > 300) ||
-          (stage.id === "anaerobik" && baseVal <= 2800)
+          (stage.id === "anaerobik" && baseVal < 2800)
         ) {
           pts = 0;
         }
