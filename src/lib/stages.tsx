@@ -19,4 +19,10 @@ export const STAGES: Stage[] = [
     metric: "time",
   },
   { id: "kuvvet", title: "Relatif Kuvvet", weight: 0.3, metric: "time" },
+  {
+    id: "pentatlon",
+    title: "Pentatlon",
+    weight: 0.3,
+    metric: "time",
+  },
 ];
